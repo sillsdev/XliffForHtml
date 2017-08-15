@@ -8,6 +8,7 @@ using System.Web;
 using System.Xml;
 using System.Xml.Schema;
 using HtmlAgilityPack;
+using Markdig;
 
 namespace XliffForHtml
 {
@@ -74,21 +75,45 @@ namespace XliffForHtml
 		}
 
 		/// <summary>
-		/// Create a extractor object and initialize it by loading and parsing the specified HTML.
+		/// Create a HtmlXliff object and initialize it by loading and parsing the specified HTML file.
 		/// </summary>
 		public static HtmlXliff Load(string filename)
 		{
-			return new HtmlXliff(File.ReadAllText(filename, Encoding.UTF8), filename);
+			return Parse(File.ReadAllText(filename, Encoding.UTF8), filename);
 		}
 
 		/// <summary>
-		/// Create a extractor object and initialize it by by parsing the specified HTML string. The optional
+		/// Create a HtmlXliff object and initialize it by by parsing the specified HTML string. The optional
 		/// filename argument will be used as the "original" attribute of the "file" element in the XLIFF if
 		/// we extract XLIFF from the HTML.
 		/// </summary>
 		public static HtmlXliff Parse(string html, string filename = "test.html")
 		{
 			return new HtmlXliff(html, filename);
+		}
+
+
+		/// <summary>
+		/// Create a HtmlXliff object and initialize it by loading the specified Markdown file, generating the
+		/// corresponding HTML string, and parsing the HTML.
+		/// </summary>
+		public static HtmlXliff LoadMarkdown(string filename)
+		{
+			return ParseMarkdown(File.ReadAllText(filename, Encoding.UTF8), filename);
+		}
+
+		/// <summary>
+		/// Create a HtmlXliff object and initialize it by by generating the corresponding HTML from the Markdown
+		/// string and then parsing the generated HTML string. The optional filename argument will be used as the
+		/// "original" attribute of the "file" element in the XLIFF if we extract XLIFF from the HTML generated
+		/// from the Markdown string.
+		/// </summary>
+		public static HtmlXliff ParseMarkdown(string markdown, string filename = "test.md")
+		{
+			// enable autolinks from text `http://`, `https://`, `ftp://`, `mailto:`, `www.xxx.yyy`
+			var pipeline = new MarkdownPipelineBuilder().UseAutoLinks().UseCustomContainers().UseGenericAttributes().Build();
+			var html = Markdown.ToHtml(markdown, pipeline);
+			return Parse(html, filename);
 		}
 
 		/// <summary>

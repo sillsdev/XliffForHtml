@@ -16,6 +16,7 @@ namespace XliffForHtml
 			string xliffFile = null;
 			string outputFile = null;
 			bool verboseWarnings = false;
+			bool markdownInput = false;
 			var langDir = "en";		// unless user changes it.
 			for (int i = 0; i < args.Length; ++i)
 			{
@@ -58,9 +59,15 @@ namespace XliffForHtml
 				{
 					verboseWarnings = true;
 				}
+				else if (args[i] == "-m" || args[i] == "--markdown")
+				{
+					markdownInput = true;
+				}
 				else if (htmlFile == null)
 				{
 					htmlFile = args[i];
+					if (htmlFile.ToLowerInvariant().EndsWith(".md"))
+						markdownInput = true;
 				}
 				else
 				{
@@ -92,7 +99,11 @@ namespace XliffForHtml
 			}
 			if (extractToXliff)
 			{
-				var extractor = HtmlXliff.Load(htmlFile);
+				HtmlXliff extractor;
+				if (markdownInput)
+					extractor = HtmlXliff.LoadMarkdown(htmlFile);
+				else
+					extractor = HtmlXliff.Load(htmlFile);
 				var xdoc = extractor.Extract();
 				if (outputFile == null)
 					outputFile = xliffFile;
@@ -103,7 +114,11 @@ namespace XliffForHtml
 			}
 			else if (injectFromXliff)
 			{
-				var injector = HtmlXliff.Load(htmlFile);
+				HtmlXliff injector;
+				if (markdownInput)
+					injector = HtmlXliff.LoadMarkdown(htmlFile);
+				else
+					injector = HtmlXliff.Load(htmlFile);
 				var hdoc = injector.InjectTranslations(xliffFile, verboseWarnings);
 				if (outputFile == null)
 					outputFile = Path.ChangeExtension(xliffFile, ".html");
@@ -124,15 +139,17 @@ namespace XliffForHtml
 		private static void Usage()
 		{
 			Console.WriteLine("Usage: HtmlXliff [options] htmlfile");
-			Console.WriteLine("       -f|--folder <lang> = the xliff file is in a subfolder named <lang> (ignored if -x or -o specified)");
-			Console.WriteLine("       -i|--inject = inject translations from xliff file");
 			Console.WriteLine("       -e|--extract = extract translations from xliff file [default]");
+			Console.WriteLine("       -i|--inject = inject translations from xliff file");
+			Console.WriteLine("       -m|--markdown = input file is Markdown instead of HTML");
+			Console.WriteLine("       -v|--verbose = display warnings for missing translations (ignored if extracting)");
+			Console.WriteLine("       -f|--folder <lang> = the xliff file is in a subfolder named <lang> (ignored if -x or -o specified)");
 			Console.WriteLine("       -x|--xliff <file> = specify xliff file path (ignored if extracting and -o specified)");
 			Console.WriteLine("       -o|--output <file> = specify output file path");
-			Console.WriteLine("       -v|--verbose = display warnings for missing translations (ignored if extracting)");
 			Console.WriteLine("By default whether input or output, the xliff file has the same name as the");
 			Console.WriteLine("html file, but with a .xlf extension.  -f causes the xliff file to be written");
 			Console.WriteLine("to or read from a specified subfolder relative to the html file.");
+			Console.WriteLine("If the input filename ends with .md (or .MD) then it is treated as Markdown regardless of -m");
 		}
 	}
 }

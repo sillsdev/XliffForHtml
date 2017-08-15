@@ -107,6 +107,7 @@ namespace XliffForHtml
 				var xdoc = extractor.Extract();
 				if (outputFile == null)
 					outputFile = xliffFile;
+				EnsureOutputDirectoryExists(Path.GetDirectoryName(outputFile));
 				if (xdoc != null)
 					xdoc.Save(outputFile);
 				else
@@ -122,6 +123,7 @@ namespace XliffForHtml
 				var hdoc = injector.InjectTranslations(xliffFile, verboseWarnings);
 				if (outputFile == null)
 					outputFile = Path.ChangeExtension(xliffFile, ".html");
+				EnsureOutputDirectoryExists(Path.GetDirectoryName(outputFile));
 				if (outputFile == htmlFile)
 				{
 					Console.Write("Replace the input html file? [y/N] ");
@@ -134,6 +136,12 @@ namespace XliffForHtml
 					hdoc.Save(outputFile);
 				}
 			}
+		}
+
+		private static void EnsureOutputDirectoryExists(string directory)
+		{
+			if (!String.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+				Directory.CreateDirectory(directory);
 		}
 
 		private static void Usage()

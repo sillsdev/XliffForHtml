@@ -150,7 +150,7 @@ namespace XliffForHtml
 
 			var file = _xliffDoc.CreateElement("file");
 			xliff.AppendChild(file);
-			file.SetAttribute("original", _originalFilename);
+			file.SetAttribute("original", Path.GetFileName(_originalFilename));
 			file.SetAttribute("datatype", "html");
 			file.SetAttribute("source-language", "en");
 

@@ -1030,8 +1030,7 @@ face", n0.FirstChild.InnerText);
 		{
 			var extractor = HtmlXliff.ParseMarkdown(@"## Bloom Notes & License {i18n=""license.title""}
 ### Automatic Update {i18n=""license.autoupdate""}
-Bloom automatically checks for new versions and downloads them while you work.
-You can disable this feature in the Settings area.{i18n=""license.autoupdate.text""}
+Bloom automatically checks for new versions and downloads them while you work.  You can disable this feature in the Settings area.{i18n=""license.autoupdate.text""}
 ");
 			/* Expected output (ignore extraneous whitespace)
 <?xml version="1.0" encoding="utf-8"?>
@@ -1064,8 +1063,7 @@ You can disable this feature in the Settings area.</source>
 
 			CheckTransUnits(body,
 				new [] {"license.title", "license.autoupdate", "license.autoupdate.text" },
-				new [] {"Bloom Notes &amp; License", "Automatic Update", @"Bloom automatically checks for new versions and downloads them while you work.
-You can disable this feature in the Settings area." });
+				new [] {"Bloom Notes &amp; License", "Automatic Update", @"Bloom automatically checks for new versions and downloads them while you work.  You can disable this feature in the Settings area." });
 		}
 
 		[Test]

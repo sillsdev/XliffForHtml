@@ -912,12 +912,16 @@ face", n0.FirstChild.InnerText);
 			{
 				Assert.AreEqual("trans-unit", tu.Name);
 				Assert.AreEqual(1, tu.Attributes.Count);
-				Assert.AreEqual(2, tu.ChildNodes.Count);
+				Assert.AreEqual(3, tu.ChildNodes.Count);
 				var source = tu.ChildNodes[0];
 				Assert.AreEqual("source", source.Name);
 				Assert.AreEqual(1, source.Attributes.Count);
 				Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
-				var note = tu.ChildNodes[1];
+				var target = tu.ChildNodes[1];
+				Assert.AreEqual("target", target.Name);
+				Assert.AreEqual(0, target.Attributes.Count);
+				Assert.AreEqual("", target.InnerXml);
+				var note = tu.ChildNodes[2];
 				Assert.AreEqual("note", note.Name);
 				Assert.AreEqual(0, note.Attributes.Count);
 				Assert.AreEqual("ID: " + tu.Attributes["id"].Value, note.InnerXml);
@@ -1000,7 +1004,7 @@ face", n0.FirstChild.InnerText);
 			Assert.AreEqual("trans-unit", tu.Name);
 			Assert.AreEqual(1, tu.Attributes.Count);
 			Assert.AreEqual("translate this!", tu.Attributes["id"].Value);
-			Assert.AreEqual(2, tu.ChildNodes.Count);
+			Assert.AreEqual(3, tu.ChildNodes.Count);
 
 			var source = tu.ChildNodes[0];
 			Assert.AreEqual("source", source.Name);
@@ -1018,7 +1022,12 @@ face", n0.FirstChild.InnerText);
 			Assert.AreEqual("This  is a test of strange characters: &lt; &amp; &gt; \" '.", source.ChildNodes[0].InnerXml);
 			Assert.AreEqual("This  is a test of strange characters: < & > \" '.", source.ChildNodes[0].ChildNodes[0].InnerText);
 
-			var note = tu.ChildNodes[1];
+			var target = tu.ChildNodes[1];
+			Assert.AreEqual("target", target.Name);
+			Assert.AreEqual(0, target.Attributes.Count);
+			Assert.AreEqual("", target.InnerXml);
+
+			var note = tu.ChildNodes[2];
 			Assert.AreEqual(0, note.Attributes.Count);
 			Assert.AreEqual(1, note.ChildNodes.Count);
 			Assert.AreEqual(XmlNodeType.Text, note.ChildNodes[0].NodeType);
@@ -1114,14 +1123,21 @@ You can disable this feature in the Settings area.</source>
 			{
 				Assert.AreEqual("trans-unit", n0.Name);
 				Assert.AreEqual(1, n0.Attributes.Count);
-				Assert.AreEqual(2, n0.ChildNodes.Count);
-				Assert.AreEqual("source", n0.ChildNodes[0].Name);
-				Assert.AreEqual(1, n0.ChildNodes[0].Attributes.Count);
-				Assert.AreEqual("en", n0.ChildNodes[0].Attributes["xml:lang"].Value);
-				Assert.AreEqual("note", n0.ChildNodes[1].Name);
-				Assert.AreEqual(0, n0.ChildNodes[1].Attributes.Count);
-				Assert.AreEqual(1, n0.ChildNodes[1].ChildNodes.Count);
-				Assert.AreEqual("ID: " + n0.Attributes["id"].Value, n0.ChildNodes[1].InnerText);
+				Assert.AreEqual(3, n0.ChildNodes.Count);
+				var source = n0.ChildNodes[0];
+				Assert.AreEqual("source", source.Name);
+				Assert.AreEqual(1, source.Attributes.Count);
+				Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
+				var target = n0.ChildNodes[1];
+				Assert.AreEqual("target", target.Name);
+				Assert.AreEqual(0, target.Attributes.Count);
+				Assert.AreEqual(0, target.ChildNodes.Count);
+				Assert.AreEqual("", target.InnerXml);
+				var note = n0.ChildNodes[2];
+				Assert.AreEqual("note", note.Name);
+				Assert.AreEqual(0, note.Attributes.Count);
+				Assert.AreEqual(1, note.ChildNodes.Count);
+				Assert.AreEqual("ID: " + n0.Attributes["id"].Value, note.InnerText);
 			}
 
 			var tu0 = body.ChildNodes[0];
@@ -1197,7 +1213,7 @@ You can disable this feature in the Settings area.</source>
 				Assert.AreEqual("trans-unit", tu.Name);
 				Assert.AreEqual(1, tu.Attributes.Count);
 				Assert.AreEqual(ids[index], tu.Attributes["id"].Value);
-				Assert.AreEqual(2, tu.ChildNodes.Count);
+				Assert.AreEqual(3, tu.ChildNodes.Count);
 
 				var source = tu.ChildNodes[0];
 				Assert.AreEqual("source", source.Name);
@@ -1214,7 +1230,7 @@ You can disable this feature in the Settings area.</source>
 
 		private void CheckNoteElement(XmlNode transUnit)
 		{
-			var note = transUnit.ChildNodes[1];
+			var note = transUnit.ChildNodes[2];
 			Assert.AreEqual("note", note.Name);
 			Assert.AreEqual(0, note.Attributes.Count);
 			Assert.AreEqual(1, note.ChildNodes.Count);

@@ -202,6 +202,15 @@ namespace XliffForHtml
 			newXliffSource.SetAttribute("xml:lang", "en");
 			ProcessSourceNode(translatableNode, newXliffSource);
 
+			// crowdin creates the target element after all existing children elements if it
+			// doesn't already exist.  The XLIFF 1.2 schema requires the target element to come
+			// after the source and before any note elements.  They suggested creating empty
+			// target elements as placeholders.  This may not matter in practice, but I don't
+			// like having invalid XLIFF even though it's valid XML and probably handled okay
+			// since we don't use a validating parser except in tests.
+			var target = _xliffDoc.CreateElement("target");
+			transUnit.AppendChild(target);
+
 			var note = _xliffDoc.CreateElement("note");
 			transUnit.AppendChild(note);
 			note.AppendChild(_xliffDoc.CreateTextNode("ID: " + id));

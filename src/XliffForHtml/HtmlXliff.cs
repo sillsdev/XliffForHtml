@@ -175,15 +175,64 @@ namespace XliffForHtml
 					if (_idsUsed.Contains(id))
 						continue;
 					_idsUsed.Add(id);
-					var transUnit = ProcessTransUnit(node, id);
+					XmlElement transUnit;
+					HtmlNode intlNode;		// If found, child node to store instead.
+					var recurseNodes = new List<HtmlNode>();	// If found, child nodes to recurse on.
+					if (IsListItemWithEmbeddedParagraph(node, out intlNode, recurseNodes))
+						transUnit = ProcessTransUnit(intlNode, id);
+					else
+						transUnit = ProcessTransUnit(node, id);
 					if (transUnit != null)
 						xliffBody.AppendChild(transUnit);
+					foreach (var child in recurseNodes)
+						ProcessHtmlElement(child, xliffBody);
 				}
 				else if (node.NodeType == HtmlNodeType.Element)
 				{
 					ProcessHtmlElement(node, xliffBody);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Determine whether this instance is a list item with an embedded paragraph.  If so, it may also have a
+		/// sublist that needs to be processed as well.
+		/// </summary>
+		/// <returns><c>true</c> if this instance is a list item with an embedded paragraph</returns>
+		/// <param name="node">node that contains text we want to localize</param>
+		/// <param name="intlNode">output child paragraph node that we really want to process instead (if returning true, else null)</param>
+		/// <param name="recurseNodes">output child nodes that need further processing (if returning true, else empty list)</param>
+		/// <remarks>>
+		/// recurseNodes must be set to a list before calling this method.  Any previous list content is cleared.
+		/// </remarks>
+		private bool IsListItemWithEmbeddedParagraph(HtmlNode node, out HtmlNode intlNode, List<HtmlNode> recurseNodes)
+		{
+			intlNode = null;
+			recurseNodes.Clear();
+			if (node.Name.ToLowerInvariant() != "li")
+				return false;
+			for (int i = 0; i < node.ChildNodes.Count; ++i)
+			{
+				if (intlNode == null)
+				{
+					var child = node.ChildNodes[i];
+					if (child.NodeType == HtmlNodeType.Text && String.IsNullOrWhiteSpace(child.InnerHtml))
+						continue;
+					if (child.Name.ToLowerInvariant() != "p" || child.Attributes.Count != 0)
+						return false;
+					intlNode = child;
+				}
+				else
+				{
+					var child = node.ChildNodes[i];
+					if (child.NodeType == HtmlNodeType.Text && String.IsNullOrWhiteSpace(child.InnerHtml))
+						continue;
+					var childName = child.Name.ToLowerInvariant();
+					if (childName == "ol" || childName == "ul" || childName == "p")
+						recurseNodes.Add(child);
+				}
+			}
+			return intlNode != null;
 		}
 
 		/// <summary>
@@ -427,12 +476,19 @@ namespace XliffForHtml
 					string translation;
 					if (_lookupTranslation.TryGetValue(id, out translation))
 					{
-						node.InnerHtml = translation;
+						HtmlNode intlNode;		// If found, child node to translate instead.
+						var recurseNodes = new List<HtmlNode>();	// If found, child nodes to recurse on.
+						if (IsListItemWithEmbeddedParagraph(node, out intlNode, recurseNodes))
+							intlNode.InnerHtml = translation;
+						else
+							node.InnerHtml = translation;
 						if (!String.IsNullOrWhiteSpace(_targetLanguage))
 						{
 							node.SetAttributeValue("lang", _targetLanguage);
 							node.SetAttributeValue("xml:lang", _targetLanguage);
 						}
+						foreach (var child in recurseNodes)
+							TranslateHtmlElement(child);
 					}
 					else if (_verboseWarnings)
 					{

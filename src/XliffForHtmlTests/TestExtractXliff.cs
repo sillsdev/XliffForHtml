@@ -1197,6 +1197,144 @@ You can disable this feature in the Settings area.</source>
 			Assert.AreEqual(".", src.ChildNodes[2].InnerText);
 		}
 
+		[Test]
+		public void TestNestedHtmlListsFromMarkdownIt()
+		{
+			var extractor = HtmlXliff.Parse(@"<html>
+ <body>
+  <ul>
+   <li i18n=""integrity.todo.ideas.Reinstall"">
+    <p>Run the Bloom installer again, and see if it starts up OK this time.</p>
+   </li>
+   <li i18n=""integrity.todo.ideas.Antivirus"">
+    <p>If that doesn't fix it, it's time to talk to your anti-virus program.</p>
+    <ul>
+     <li i18n=""integrity.todo.ideas.AVAST"">
+      <p>AVAST: <a href=""http://www.getavast.net/support/managing-exceptions"">Instructions</a>.</p>
+     </li>
+     <li i18n=""integrity.todo.ideas.Restart"">
+      <p>Run the Bloom installer again, and see if it starts up OK this time.</p>
+     </li>
+    </ul>
+   </li>
+   <li i18n=""integrity.todo.ideas.Retrieve"">
+    <p>You can also try and retrieve the part of Bloom that your anti-virus program took from it.</p>
+   </li>
+  </ul>
+ </body>
+</html>");
+			/* Expected output (ignore extraneous whitespace)
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:html="http://www.w3.org/TR/html" xmlns:sil="http://sil.org/software/XLiff">
+ <file original="test.html" datatype="html" source-language="en">
+  <body>
+   <trans-unit id="integrity.todo.ideas.Reinstall">
+    <source xml:lang="en">Run the Bloom installer again, and see if it starts up OK this time.</source>
+    <note>ID: integrity.todo.ideas.Reinstall</note>
+   </trans-unit>
+   <trans-unit id="integrity.todo.ideas.Antivirus">
+    <source xml:lang="en">If that doesn't fix it, it's time to talk to your anti-virus program.</source>
+    <note>ID: integrity.todo.ideas.Antivirus</note>
+   </trans-unit>
+   <trans-unit id="integrity.todo.ideas.AVAST">
+    <source xml:lang="en">AVAST: <g id="genid-1" ctype="x-html-a" html:href="http://www.getavast.net/support/managing-exceptions">Instructions</g>.</source>
+    <note>ID: integrity.todo.ideas.AVAST</note>
+   </trans-unit>
+   <trans-unit id="integrity.todo.ideas.Restart">
+    <source xml:lang="en">Run the Bloom installer again, and see if it starts up OK this time.</source>
+    <note>ID: integrity.todo.ideas.Restart</note>
+   </trans-unit>
+   <trans-unit id="integrity.todo.ideas.Retrieve">
+    <source xml:lang="en">You can also try and retrieve the part of Bloom that your anti-virus program took from it.</source>
+    <note>ID: integrity.todo.ideas.Retrieve</note>
+   </trans-unit>
+  </body>
+ </file>
+</xliff>*/
+			var xmlDoc = extractor.Extract();
+			Assert.IsNotNull(xmlDoc);
+			ValidateXliffOutput(xmlDoc.OuterXml, "Xliff for TestMarkdownWithLinks did not validate against schema: {0}");
+
+			var body = xmlDoc.SelectSingleNode("/xliff/file/body");
+			Assert.IsNotNull(body);
+
+			// Without the new code being tested by this method, only three source elements were extracted for translation,
+			// one for each of the three top-level list items in the HTML.  The strings all contained <g> elements containing
+			// the html markup, and the second string had a real mess containing all the content including both the initial
+			// paragraph and the entire sublist encoded with (invalid) <g> elements.  It was very ugly (undesireable and even
+			// invalid) content for the source elements in the XLIFF.
+
+			Assert.AreEqual(5, body.ChildNodes.Count);
+			foreach (XmlNode n0 in body.ChildNodes)
+			{
+				Assert.AreEqual("trans-unit", n0.Name);
+				Assert.AreEqual(1, n0.Attributes.Count);
+				Assert.AreEqual(3, n0.ChildNodes.Count);
+				var source = n0.ChildNodes[0];
+				Assert.AreEqual("source", source.Name);
+				Assert.AreEqual(1, source.Attributes.Count);
+				Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
+				var target = n0.ChildNodes[1];
+				Assert.AreEqual("target", target.Name);
+				Assert.AreEqual(0, target.Attributes.Count);
+				Assert.AreEqual(0, target.ChildNodes.Count);
+				Assert.AreEqual("", target.InnerXml);
+				var note = n0.ChildNodes[2];
+				Assert.AreEqual("note", note.Name);
+				Assert.AreEqual(0, note.Attributes.Count);
+				Assert.AreEqual(1, note.ChildNodes.Count);
+				Assert.AreEqual("ID: " + n0.Attributes["id"].Value, note.InnerText);
+			}
+
+			var tu0 = body.ChildNodes[0];
+			Assert.AreEqual(1, tu0.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Reinstall", tu0.Attributes["id"].Value);
+			var src = tu0.ChildNodes[0];
+			Assert.AreEqual(1, src.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
+			Assert.AreEqual("Run the Bloom installer again, and see if it starts up OK this time.", src.ChildNodes[0].InnerText);
+
+			var tu1 = body.ChildNodes[1];
+			Assert.AreEqual(1, tu1.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Antivirus", tu1.Attributes["id"].Value);
+			src = tu1.ChildNodes[0];
+			Assert.AreEqual(1, src.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
+			Assert.AreEqual("If that doesn't fix it, it's time to talk to your anti-virus program.", src.ChildNodes[0].InnerText);
+
+			var tu2 = body.ChildNodes[2];
+			Assert.AreEqual(1, tu2.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.AVAST", tu2.Attributes["id"].Value);
+			src = tu2.ChildNodes[0];
+			Assert.AreEqual(3, src.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
+			Assert.AreEqual("AVAST: ", src.ChildNodes[0].InnerText);
+			Assert.AreEqual("g", src.ChildNodes[1].Name);
+			Assert.AreEqual(3, src.ChildNodes[1].Attributes.Count);
+			Assert.AreEqual("genid-1", src.ChildNodes[1].Attributes["id"].Value);
+			Assert.AreEqual("x-html-a", src.ChildNodes[1].Attributes["ctype"].Value);
+			Assert.AreEqual("http://www.getavast.net/support/managing-exceptions", src.ChildNodes[1].Attributes["href", HtmlXliff.kHtmlNamespace].Value);
+			Assert.AreEqual("Instructions", src.ChildNodes[1].InnerText);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[2].NodeType);
+			Assert.AreEqual(".", src.ChildNodes[2].InnerText);
+
+			var tu3 = body.ChildNodes[3];
+			Assert.AreEqual(1, tu3.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Restart", tu3.Attributes["id"].Value);
+			src = tu3.ChildNodes[0];
+			Assert.AreEqual(1, src.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
+			Assert.AreEqual("Run the Bloom installer again, and see if it starts up OK this time.", src.ChildNodes[0].InnerText);
+
+			var tu4 = body.ChildNodes[4];
+			Assert.AreEqual(1, tu4.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Retrieve", tu4.Attributes["id"].Value);
+			src = tu4.ChildNodes[0];
+			Assert.AreEqual(1, src.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
+			Assert.AreEqual("You can also try and retrieve the part of Bloom that your anti-virus program took from it.", src.ChildNodes[0].InnerText);
+		}
+
 		/// <summary>
 		/// Check all of the children of the xliff body element against the ids and values provided.
 		/// </summary>
@@ -1223,9 +1361,17 @@ You can disable this feature in the Settings area.</source>
 				Assert.AreEqual(XmlNodeType.Text, source.FirstChild.NodeType);
 				Assert.AreEqual(values[index], source.InnerXml);
 
+				CheckTargetElement(tu);
 				CheckNoteElement(tu);
 				++index;
 			}
+		}
+
+		private void CheckTargetElement(XmlNode transUnit)
+		{
+			var target = transUnit.ChildNodes[1];
+			Assert.AreEqual(0, target.Attributes.Count);
+			Assert.AreEqual("", target.InnerXml);
 		}
 
 		private void CheckNoteElement(XmlNode transUnit)

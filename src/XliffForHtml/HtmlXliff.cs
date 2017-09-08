@@ -175,15 +175,75 @@ namespace XliffForHtml
 					if (_idsUsed.Contains(id))
 						continue;
 					_idsUsed.Add(id);
-					var transUnit = ProcessTransUnit(node, id);
+					// See the description of GetProperNodesToProcess for why we need this method call
+					// and the processing of its output list.
+					List<HtmlNode> recurseNodes;	// child nodes to recurse on, usually none.
+					var intlNode = GetProperNodesToProcess(node, out recurseNodes);
+					var transUnit = ProcessTransUnit(intlNode, id);
 					if (transUnit != null)
 						xliffBody.AppendChild(transUnit);
+					foreach (var child in recurseNodes)
+						ProcessHtmlElement(child, xliffBody);
 				}
 				else if (node.NodeType == HtmlNodeType.Element)
 				{
 					ProcessHtmlElement(node, xliffBody);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Raw HTML and PUG allow us to put i18n attributes exactly where we want them.  Markdown is far more
+		/// limited.  It originally didn't allow attributes at all.  Extensions have been written to allow
+		/// attributes but these differ in how they work between different markdown processors.  The best one
+		/// we've found so far is markdown-it (javascript/node.js).  The problematic area is with list items,
+		/// and with lists embedded inside list items.  markdown-it allows list items to have attributes, and
+		/// places the attributes directly on the list item (li element) itself.  The text of the list item is
+		/// then embedded inside a paragraph (p element).  Any sublist follows that paragraph as either a ul
+		/// or ol element containing its own li elements.  Raw HTML and PUG would presumably place the i18n
+		/// attribute exactly where it is needed rather than one level above.  This breaks our normal simple
+		/// recursive scan through the HTML, and also makes the XLIFF source data look strange if we don't
+		/// drill down to the paragraph (p element) containing the text.
+		/// Detecting this situation and providing the needed data to deal with it is what this method does.
+		/// </summary>
+		/// <returns>
+		/// <c>node</c> if nothing special is needed (and <c>recurseNodes</c> will be empty in that case), or
+		/// the first child element of node if appropriate, with other child elements that need further
+		/// processing added to <c>recurseNodes</c>
+		/// </returns>
+		/// <param name="node">node that contains text we want to localize (tagged with i18n attribute)</param>
+		/// <param name="recurseNodes">output child nodes that need further processing, if any</param>
+		/// <remarks>
+		/// Fortunately this method can be used both for extracting strings and injecting translations.
+		/// "i18n attributes" in the summary above includes both i18n and data-i18n attributes.
+		/// </remarks>
+		private HtmlNode GetProperNodesToProcess(HtmlNode node, out List<HtmlNode> recurseNodes)
+		{
+			recurseNodes = new List<HtmlNode>();
+			if (node.Name.ToLowerInvariant() != "li")
+				return node;
+			HtmlNode intlNode = null;
+			foreach (var child in node.ChildNodes)
+			{
+				if (intlNode == null)
+				{
+					if (child.NodeType == HtmlNodeType.Text && String.IsNullOrWhiteSpace(child.InnerHtml))
+						continue;
+					// Markdown-it places the list item text in a bare paragraph element.
+					if (child.Name.ToLowerInvariant() != "p" || child.Attributes.Count != 0)
+						return node;
+					intlNode = child;
+				}
+				else
+				{
+					if (child.NodeType == HtmlNodeType.Text && String.IsNullOrWhiteSpace(child.InnerHtml))
+						continue;
+					var childName = child.Name.ToLowerInvariant();
+					if (childName == "ol" || childName == "ul" || childName == "p")
+						recurseNodes.Add(child);
+				}
+			}
+			return intlNode;
 		}
 
 		/// <summary>
@@ -427,12 +487,18 @@ namespace XliffForHtml
 					string translation;
 					if (_lookupTranslation.TryGetValue(id, out translation))
 					{
-						node.InnerHtml = translation;
+						// See the description of GetProperNodesToProcess for why we need this method call
+						// and the processing of its output list.
+						List<HtmlNode> recurseNodes;	// child nodes to recurse on, usually none.
+						var intlNode = GetProperNodesToProcess(node, out recurseNodes);
+						intlNode.InnerHtml = translation;
 						if (!String.IsNullOrWhiteSpace(_targetLanguage))
 						{
-							node.SetAttributeValue("lang", _targetLanguage);
-							node.SetAttributeValue("xml:lang", _targetLanguage);
+							intlNode.SetAttributeValue("lang", _targetLanguage);
+							intlNode.SetAttributeValue("xml:lang", _targetLanguage);
 						}
+						foreach (var child in recurseNodes)
+							TranslateHtmlElement(child);
 					}
 					else if (_verboseWarnings)
 					{

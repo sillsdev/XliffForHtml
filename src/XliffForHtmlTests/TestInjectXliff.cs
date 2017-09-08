@@ -1264,5 +1264,184 @@ Puede desactivar esta función en el área Configuración.", para.InnerHtml);
 			Assert.AreEqual(HtmlNodeType.Text, span.ChildNodes[2].NodeType);
 			Assert.AreEqual(".", span.ChildNodes[2].InnerHtml);
 		}
+
+		[Test]
+		public void TestNestedHtmlListsFromMarkdownIt()
+		{
+			var injector = HtmlXliff.Parse(@"<html>
+ <body>
+  <ul>
+   <li i18n=""integrity.todo.ideas.Reinstall"">
+    <p>Run the Bloom installer again, and see if it starts up OK this time.</p>
+   </li>
+   <li i18n=""integrity.todo.ideas.Antivirus"">
+    <p>If that doesn't fix it, it's time to talk to your anti-virus program.</p>
+    <ul>
+     <li i18n=""integrity.todo.ideas.AVAST"">
+      <p>AVAST: <a href=""http://www.getavast.net/support/managing-exceptions"">Instructions</a>.</p>
+     </li>
+     <li i18n=""integrity.todo.ideas.Restart"">
+      <p>Run the Bloom installer again, and see if it starts up OK this time.</p>
+     </li>
+    </ul>
+   </li>
+   <li i18n=""integrity.todo.ideas.Retrieve"">
+    <p>You can also try and retrieve the part of Bloom that your anti-virus program took from it.</p>
+   </li>
+  </ul>
+ </body>
+</html>");
+			var xliffDoc = new XmlDocument();
+			xliffDoc.LoadXml(@"<?xml version=""1.0"" encoding=""utf-8""?>
+<xliff version=""1.2"" xmlns=""urn:oasis:names:tc:xliff:document:1.2"" xmlns:html=""http://www.w3.org/TR/html"" xmlns:sil=""http://sil.org/software/XLiff"">
+ <file original=""test.html"" datatype=""html"" source-language=""en"" target-language=""fr"">
+  <body>
+   <trans-unit id=""integrity.todo.ideas.Reinstall"">
+    <source xml:lang=""en"">Run the Bloom installer again, and see if it starts up OK this time.</source>
+    <target xml:lang=""fr"">Lancez à nouveau l'installateur Bloom et vérifiez si cette fois, il démarre correctement.</target>
+    <note>ID: integrity.todo.ideas.Reinstall</note>
+   </trans-unit>
+   <trans-unit id=""integrity.todo.ideas.Antivirus"">
+    <source xml:lang=""en"">If that doesn't fix it, it's time to talk to your anti-virus program.</source>
+    <target xml:lang=""fr"">Si cela ne règle pas le problème, il va vous falloir intervenir au niveau de votre programme antivirus.</target>
+    <note>ID: integrity.todo.ideas.Antivirus</note>
+   </trans-unit>
+   <trans-unit id=""integrity.todo.ideas.AVAST"">
+    <source xml:lang=""en"">AVAST: <g id=""genid-1"" ctype=""x-html-a"" html:href=""http://www.getavast.net/support/managing-exceptions"">Instructions</g>.</source>
+    <target xml:lang=""fr"">AVAST : <g id=""genid-1"" ctype=""x-html-a"" html:href=""http://www.getavast.net/support/managing-exceptions"">Instructions</g>.</target>
+    <note>ID: integrity.todo.ideas.AVAST</note>
+   </trans-unit>
+   <trans-unit id=""integrity.todo.ideas.Restart"">
+    <source xml:lang=""en"">Run the Bloom installer again, and see if it starts up OK this time.</source>
+    <target xml:lang=""fr"">Exécutez l'installateur Bloom à nouveau, et voyez s'il démarre OK cette fois.</target>
+    <note>ID: integrity.todo.ideas.Restart</note>
+   </trans-unit>
+   <trans-unit id=""integrity.todo.ideas.Retrieve"">
+    <source xml:lang=""en"">You can also try and retrieve the part of Bloom that your anti-virus program took from it.</source>
+    <target xml:lang=""fr"">Vous pouvez également essayer de récupérer la partie de Bloom que votre programme anti-virus a retiré.</target>
+    <note>ID: integrity.todo.ideas.Retrieve</note>
+   </trans-unit>
+  </body>
+ </file>
+</xliff>");
+			var translatedHtml = injector.InjectTranslations(xliffDoc, true);
+			Assert.IsNotNull(translatedHtml);
+
+			// Without the new code being tested by this method, only the top three list items survived the
+			// translation process.  Assuming that the XLIFF has the form above with simple strings for each
+			// target element, exactly those strings replaced the entire content of the list items.  The
+			// embedded p element markup were lost, and the embedded sublist was lost.
+
+			var elements = translatedHtml.DocumentNode.SelectNodes("/html/body/*");
+			Assert.AreEqual(1, elements.Count);
+
+			var ul = elements[0];
+			Assert.AreEqual("ul", ul.Name);
+			Assert.AreEqual(0, ul.Attributes.Count);
+			Assert.AreEqual(7, ul.ChildNodes.Count);
+
+			CheckForEmptyEvenNumberedTextChildNodes(ul);
+
+			var li0 = ul.ChildNodes[1];
+			Assert.AreEqual("li", li0.Name);
+			Assert.AreEqual(1, li0.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Reinstall", li0.Attributes["i18n"].Value);
+			Assert.AreEqual(3, li0.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(li0);
+
+			var p0 = li0.ChildNodes[1];
+			Assert.AreEqual("p", p0.Name);
+			Assert.AreEqual(2, p0.Attributes.Count);
+			Assert.AreEqual("fr", p0.Attributes["lang"].Value);
+			Assert.AreEqual("fr", p0.Attributes["xml:lang"].Value);
+			Assert.AreEqual(1, p0.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, p0.ChildNodes[0].NodeType);
+			Assert.AreEqual("Lancez à nouveau l'installateur Bloom et vérifiez si cette fois, il démarre correctement.", p0.InnerHtml);
+
+			var li1 = ul.ChildNodes[3];
+			Assert.AreEqual("li", li1.Name);
+			Assert.AreEqual(1, li1.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Antivirus", li1.Attributes["i18n"].Value);
+			Assert.AreEqual(5, li1.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(li1);
+
+			var p1 = li1.ChildNodes[1];
+			Assert.AreEqual("p", p1.Name);
+			Assert.AreEqual(2, p1.Attributes.Count);
+			Assert.AreEqual("fr", p1.Attributes["lang"].Value);
+			Assert.AreEqual("fr", p1.Attributes["xml:lang"].Value);
+			Assert.AreEqual(1, p1.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, p1.ChildNodes[0].NodeType);
+			Assert.AreEqual("Si cela ne règle pas le problème, il va vous falloir intervenir au niveau de votre programme antivirus.", p1.InnerHtml);
+
+			var li1ul = li1.ChildNodes[3];
+			Assert.AreEqual("ul", li1ul.Name);
+			Assert.AreEqual(0, li1ul.Attributes.Count);
+			Assert.AreEqual(5, li1ul.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(li1ul);
+
+			var li1a = li1ul.ChildNodes[1];
+			Assert.AreEqual("li", li1a.Name);
+			Assert.AreEqual(1, li1a.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.AVAST", li1a.Attributes["i18n"].Value);
+			CheckForEmptyEvenNumberedTextChildNodes(li1a);
+
+			var p2 = li1a.ChildNodes[1];
+			Assert.AreEqual("p", p2.Name);
+			Assert.AreEqual(2, p2.Attributes.Count);
+			Assert.AreEqual("fr", p2.Attributes["lang"].Value);
+			Assert.AreEqual("fr", p2.Attributes["xml:lang"].Value);
+			Assert.AreEqual(3, p2.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, p2.ChildNodes[0].NodeType);
+			Assert.AreEqual("AVAST : ", p2.ChildNodes[0].InnerHtml);
+			var anchor = p2.ChildNodes[1];
+			Assert.AreEqual("a", anchor.Name);
+			Assert.AreEqual(1, anchor.Attributes.Count);
+			Assert.AreEqual("http://www.getavast.net/support/managing-exceptions", anchor.Attributes["href"].Value);
+			Assert.AreEqual("Instructions", anchor.InnerText);
+			Assert.AreEqual(HtmlNodeType.Text, p2.ChildNodes[2].NodeType);
+			Assert.AreEqual(".", p2.ChildNodes[2].InnerHtml);
+
+			var li2a = li1ul.ChildNodes[3];
+			Assert.AreEqual("li", li2a.Name);
+			Assert.AreEqual(1, li2a.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Restart", li2a.Attributes["i18n"].Value);
+			CheckForEmptyEvenNumberedTextChildNodes(li2a);
+
+			var p3 = li2a.ChildNodes[1];
+			Assert.AreEqual("p", p3.Name);
+			Assert.AreEqual(2, p3.Attributes.Count);
+			Assert.AreEqual("fr", p3.Attributes["lang"].Value);
+			Assert.AreEqual("fr", p3.Attributes["xml:lang"].Value);
+			Assert.AreEqual(1, p3.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, p3.ChildNodes[0].NodeType);
+			Assert.AreEqual("Exécutez l'installateur Bloom à nouveau, et voyez s'il démarre OK cette fois.", p3.InnerHtml);
+
+			var li2 = ul.ChildNodes[5];
+			Assert.AreEqual("li", li2.Name);
+			Assert.AreEqual(1, li2.Attributes.Count);
+			Assert.AreEqual("integrity.todo.ideas.Retrieve", li2.Attributes["i18n"].Value);
+			Assert.AreEqual(3, li2.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(li2);
+
+			var p4 = li2.ChildNodes[1];
+			Assert.AreEqual("p", p4.Name);
+			Assert.AreEqual(2, p4.Attributes.Count);
+			Assert.AreEqual("fr", p4.Attributes["lang"].Value);
+			Assert.AreEqual("fr", p4.Attributes["xml:lang"].Value);
+			Assert.AreEqual(1, p4.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, p4.ChildNodes[0].NodeType);
+			Assert.AreEqual("Vous pouvez également essayer de récupérer la partie de Bloom que votre programme anti-virus a retiré.", p4.InnerHtml);
+		}
+
+		void CheckForEmptyEvenNumberedTextChildNodes(HtmlNode node)
+		{
+			for (int i = 0; i < node.ChildNodes.Count; i += 2)
+			{
+				Assert.AreEqual(HtmlNodeType.Text, node.ChildNodes[i].NodeType);
+				Assert.IsNotNullOrEmpty(node.ChildNodes[i].InnerText);
+				Assert.IsTrue(String.IsNullOrWhiteSpace(node.ChildNodes[i].InnerText));
+			}
+		}
 	}
 }

@@ -38,9 +38,6 @@
       <HintPath>..\..\packages\HtmlAgilityPack.1.4.9.5\lib\Net45\HtmlAgilityPack.dll</HintPath>
     </Reference>
     <Reference Include="System.Web" />
-    <Reference Include="Markdig">
-      <HintPath>..\..\packages\Markdig.0.13.0\lib\net40\Markdig.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />

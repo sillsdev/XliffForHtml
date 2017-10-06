@@ -21,6 +21,11 @@ namespace XliffForHtml
 	/// Inline markup inside text elements is handled according to the recommendations of
 	/// http://docs.oasis-open.org/xliff/v1.2/xliff-profile-html/xliff-profile-html-1.2-cd02.html.
 	/// </summary>
+	/// <remarks>
+	/// Note that this exceedingly ethnocentric code assumes English is always the source language.
+	/// This could be changed if the need ever arises, probably by adding a command line argument
+	/// for extracting and paying attention to the recorded source-language attribute for injection.
+	/// </remarks>
 	public class HtmlXliff
 	{
 		public const string kXliffNamespace = "urn:oasis:names:tc:xliff:document:1.2";
@@ -51,6 +56,11 @@ namespace XliffForHtml
 		/// The name space manager needed to deal with XPath searches in the InjectTranslations method.
 		/// </summary>
 		private XmlNamespaceManager _nsmgr;
+		/// <summary>
+		/// Flag that the target language is written right to left.  This needs to be recorded in
+		/// the output HTML file.
+		/// </summary>
+		private bool _rtl;
 
 		private bool _verboseWarnings;
 
@@ -456,8 +466,35 @@ namespace XliffForHtml
 			PreProcessXliff(xliff);
 			var htmlDoc = new HtmlDocument();
 			htmlDoc.LoadHtml(_originalHtml);
+			if (_rtl)
+				InsertRtlDiv(htmlDoc);
 			TranslateHtmlElement(htmlDoc.DocumentNode);
 			return htmlDoc;
+		}
+
+		private void InsertRtlDiv(HtmlDocument htmlDoc)
+		{
+			var divNode = htmlDoc.CreateElement("div");
+			divNode.SetAttributeValue("dir", "rtl");
+			divNode.SetAttributeValue("lang", _targetLanguage);
+			divNode.SetAttributeValue("xml:lang", _targetLanguage);
+			var docNode = htmlDoc.DocumentNode;
+			HtmlNode bodyNode;
+			if (docNode.FirstChild.Name == "html")
+			{
+				bodyNode = docNode.SelectSingleNode("/html/body");
+			}
+			else if (docNode.FirstChild.Name == "body")
+			{
+				bodyNode = docNode.FirstChild;
+			}
+			else
+			{
+				bodyNode = docNode;
+			}
+			divNode.AppendChildren(bodyNode.ChildNodes);
+			bodyNode.ChildNodes.Clear();
+			bodyNode.AppendChild(divNode);
 		}
 
 		private void TranslateHtmlElement(HtmlNode htmlElement)
@@ -468,25 +505,37 @@ namespace XliffForHtml
 				if (!IsEmptyElement(node.Name) && TryExtractDataI18n(node, out id) && ContainsTranslatableText(node))
 				{
 					string translation;
+					// See the description of GetProperNodesToProcess for why we need this method call
+					// and the processing of its output list.
+					List<HtmlNode> recurseNodes;	// child nodes to recurse on, usually none.
+					var intlNode = GetProperNodesToProcess(node, out recurseNodes);
 					if (_lookupTranslation.TryGetValue(id, out translation))
 					{
-						// See the description of GetProperNodesToProcess for why we need this method call
-						// and the processing of its output list.
-						List<HtmlNode> recurseNodes;	// child nodes to recurse on, usually none.
-						var intlNode = GetProperNodesToProcess(node, out recurseNodes);
 						intlNode.InnerHtml = translation;
 						if (!String.IsNullOrWhiteSpace(_targetLanguage))
 						{
 							intlNode.SetAttributeValue("lang", _targetLanguage);
 							intlNode.SetAttributeValue("xml:lang", _targetLanguage);
 						}
-						foreach (var child in recurseNodes)
-							TranslateHtmlElement(child);
+						if (_rtl)
+							intlNode.SetAttributeValue("dir", "rtl");
 					}
 					else if (_verboseWarnings)
 					{
 						Console.WriteLine("Warning: cannot find translated string for id = \"{0}\"", id);
+						if (intlNode != null && intlNode.Attributes != null)
+						{
+							if (intlNode.Attributes["lang"] == null && intlNode.Attributes["xml:lang"] == null)
+							{
+								intlNode.SetAttributeValue("lang", "en");
+								intlNode.SetAttributeValue("xml:lang", "en");
+							}
+							if (_rtl && intlNode.Attributes["dir"] == null)
+								intlNode.SetAttributeValue("dir", "ltr");
+						}
 					}
+					foreach (var child in recurseNodes)
+						TranslateHtmlElement(child);
 				}
 				else if (node.NodeType == HtmlNodeType.Element)
 				{
@@ -512,7 +561,43 @@ namespace XliffForHtml
 			}
 			var targetLang = xliffDoc.SelectSingleNode("/x:xliff/x:file/@target-language", _nsmgr);
 			if (targetLang != null)
+			{
 				_targetLanguage = targetLang.Value;
+				_rtl = IsLanguageRtl(_targetLanguage);
+			}
+		}
+
+		private bool IsLanguageRtl(string lang)
+		{
+			switch (lang)
+			{
+			// Check for languages known to be written exclusively (or by default) RTL
+			// This list is not exhaustive, but covers major languages that might possibly
+			// be localized (and some that are not very likely).
+			case "ar":	// Arabic
+			case "az":	// Azeri/Azerbaijani
+			case "fa":	// Farsi/Persian
+			case "kk":	// Kazakh
+			case "ku":	// Kurdish
+			case "pa":	// Panjabi/Punjabi
+			case "ps":	// Pashto/Pushto
+			case "sd":	// Sindhi
+			case "ur":	// Urdu
+			case "he":	// Hebrew
+			case "dv":	// Divehi/Dhivehi/Maldivian
+				return true;
+			default:
+				// Check for known RTL scripts expressly contained in the language code
+				return (lang.Contains("-Adlm") ||								// Adlam
+						lang.Contains("-Arab") || lang.Contains("-Aran") ||		// Arabic variants
+						lang.Contains("-Hebr") ||								// Hebrew
+						lang.Contains("-Mand") ||								// Mandaic, Mandaean
+						lang.Contains("-Mend") ||								// Mende Kikakui
+						lang.Contains("-Nkoo") ||								// N’Ko
+						lang.Contains("-Samr") ||								// Samaritan
+						lang.Contains("-Syrc") || lang.Contains("-Syre") || lang.Contains("-Syrj") || lang.Contains("-Syrn") ||	// Syriac variants
+						lang.Contains("-Thaa"));								// Thaana
+			}
 		}
 
 		private string ProcessTarget(XmlNode target)

@@ -843,24 +843,32 @@ face</g>.</source>
 
 			var cells = translatedHtml.DocumentNode.SelectNodes("/html/body/table/tr/td");
 			Assert.AreEqual(4, cells.Count);
-			// No lang attribute added, original English text retained
-			Assert.AreEqual(2, cells[0].Attributes.Count);
+			// original English text retained, English lang attributes added
+			Assert.AreEqual(4, cells[0].Attributes.Count);
 			Assert.AreEqual("Table.Cell-1.1", cells[0].Attributes["i18n"].Value);
 			Assert.AreEqual("top", cells[0].Attributes["valign"].Value);
+			Assert.AreEqual("en", cells[0].Attributes["lang"].Value);
+			Assert.AreEqual("en", cells[0].Attributes["xml:lang"].Value);
 			Assert.AreEqual("Text in cell r1-c1", cells[0].InnerHtml);
-			// No lang attribute added, original English text retained
-			Assert.AreEqual(2, cells[1].Attributes.Count);
+			// original English text retained, English lang attributes added
+			Assert.AreEqual(4, cells[1].Attributes.Count);
 			Assert.AreEqual("Table.Cell-1.2", cells[1].Attributes["i18n"].Value);
 			Assert.AreEqual("top", cells[1].Attributes["valign"].Value);
+			Assert.AreEqual("en", cells[1].Attributes["lang"].Value);
+			Assert.AreEqual("en", cells[1].Attributes["xml:lang"].Value);
 			Assert.AreEqual("Text in cell r1-c2", cells[1].InnerHtml);
-			// No lang attribute added, original English text retained
-			Assert.AreEqual(2, cells[2].Attributes.Count);
+			// original English text retained, English lang attributes added
+			Assert.AreEqual(4, cells[2].Attributes.Count);
 			Assert.AreEqual("Table.Cell-2.1", cells[2].Attributes["i18n"].Value);
 			Assert.AreEqual("#C0C0C0", cells[2].Attributes["bgcolor"].Value);
+			Assert.AreEqual("en", cells[2].Attributes["lang"].Value);
+			Assert.AreEqual("en", cells[2].Attributes["xml:lang"].Value);
 			Assert.AreEqual("Text in cell r2-c1", cells[2].InnerHtml);
-			// No lang attribute added, original English text retained
-			Assert.AreEqual(1, cells[3].Attributes.Count);
+			// original English text retained, English lang attributes added
+			Assert.AreEqual(3, cells[3].Attributes.Count);
 			Assert.AreEqual("Table.Cell-2.2", cells[3].Attributes["i18n"].Value);
+			Assert.AreEqual("en", cells[3].Attributes["lang"].Value);
+			Assert.AreEqual("en", cells[3].Attributes["xml:lang"].Value);
 			Assert.AreEqual("Text in cell r2-c2", cells[3].InnerHtml);
 
 			var paras = translatedHtml.DocumentNode.SelectNodes("html/body/p");
@@ -1203,6 +1211,147 @@ face</g>.</source>
 			Assert.AreEqual(1, p4.ChildNodes.Count);
 			Assert.AreEqual(HtmlNodeType.Text, p4.ChildNodes[0].NodeType);
 			Assert.AreEqual("Vous pouvez également essayer de récupérer la partie de Bloom que votre programme anti-virus a retiré.", p4.InnerHtml);
+		}
+
+		[Test]
+		public void TestPartialHtmlFromMarkdownIt()
+		{
+			var injector = HtmlXliff.Parse(@"<h2 i18n=""integrity.title"">Bloom cannot find some of its own files, and cannot continue</h2>
+<h3 i18n=""integrity.causes"">Possible Causes</h3>
+<ol>
+<li i18n=""integrity.causes.1"">
+<p>Your antivirus may have &quot;quarantined&quot; one or more Bloom files.</p>
+</li>
+<li i18n=""integrity.causes.2"">
+<p>Your computer administrator may have your computer &quot;locked down&quot; to prevent bad things, but in such a way that Bloom could not place these files where they belong. </p>
+</li>
+</ol>");
+			var xliffDoc = new XmlDocument();
+			xliffDoc.LoadXml(@"<?xml version=""1.0"" encoding=""utf-8""?>
+<xliff version=""1.2"" xmlns=""urn:oasis:names:tc:xliff:document:1.2"" xmlns:html=""http://www.w3.org/TR/html"" xmlns:sil=""http://sil.org/software/XLiff"">
+  <file original=""IntegrityFailureAdvice-ar.htm"" datatype=""html"" source-language=""en"" target-language=""ar"">
+    <body>
+      <trans-unit id=""integrity.title"">
+        <source xml:lang=""en"">Bloom cannot find some of its own files, and cannot continue</source>
+        <target xml:lang=""ar"">يتعذر على Bloom العثور على بعض الملفات الخاصة به، ولا يمكنه المتابعة</target>
+        <note>ID: integrity.title</note>
+      </trans-unit>
+      <trans-unit id=""integrity.causes"">
+        <source xml:lang=""en"">Possible Causes</source>
+        <target xml:lang=""ar"">الأسباب الممكنة</target>
+        <note>ID: integrity.causes</note>
+      </trans-unit>
+      <trans-unit id=""integrity.causes.1"">
+        <source xml:lang=""en"">Your antivirus may have ""quarantined"" one or more Bloom files.</source>
+        <target xml:lang=""ar"">ربما قام مكافح الفيروسات بعزل ملف واحد أو أكثر من ملفات Bloom.</target>
+        <note>ID: integrity.causes.1</note>
+      </trans-unit>
+      <trans-unit id=""integrity.causes.2"">
+        <source xml:lang=""en"">Your computer administrator may have your computer ""locked down"" to prevent bad things, but in such a way that Bloom could not place these files where they belong. </source>
+        <target xml:lang=""ar"">ربما قام مشرف الكمبيوتر بقفل الكمبيوتر لمنع القيام بأنشطة سيئة، وأدى ذلك إلى تعذر Bloom عن وضع الملفات في المكان المناسب.</target>
+        <note>ID: integrity.causes.2</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>");
+			var translatedHtml = injector.InjectTranslations(xliffDoc, true);
+			Assert.IsNotNull(translatedHtml);
+
+			Assert.AreEqual(1, translatedHtml.DocumentNode.ChildNodes.Count);
+			var divDir = translatedHtml.DocumentNode.FirstChild;
+			Assert.AreEqual("div", divDir.Name);
+			Assert.AreEqual(3, divDir.Attributes.Count);
+			Assert.AreEqual("rtl", divDir.Attributes["dir"].Value);
+			Assert.AreEqual("ar", divDir.Attributes["lang"].Value);
+			Assert.AreEqual("ar", divDir.Attributes["xml:lang"].Value);
+
+			Assert.AreEqual(5, divDir.ChildNodes.Count);
+
+			var h2 = divDir.ChildNodes[0];
+			Assert.AreEqual("h2", h2.Name);
+			Assert.AreEqual(4, h2.Attributes.Count);
+			Assert.AreEqual("rtl", h2.Attributes["dir"].Value);
+			Assert.AreEqual("ar", h2.Attributes["lang"].Value);
+			Assert.AreEqual("ar", h2.Attributes["xml:lang"].Value);
+			Assert.AreEqual("integrity.title", h2.Attributes["i18n"].Value);
+			Assert.AreEqual("يتعذر على Bloom العثور على بعض الملفات الخاصة به، ولا يمكنه المتابعة", h2.InnerHtml);
+
+			var tn = divDir.ChildNodes[1];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			var h3 = divDir.ChildNodes[2];
+			Assert.AreEqual("h3", h3.Name);
+			Assert.AreEqual(4, h3.Attributes.Count);
+			Assert.AreEqual("rtl", h3.Attributes["dir"].Value);
+			Assert.AreEqual("ar", h3.Attributes["lang"].Value);
+			Assert.AreEqual("ar", h3.Attributes["xml:lang"].Value);
+			Assert.AreEqual("integrity.causes", h3.Attributes["i18n"].Value);
+			Assert.AreEqual("الأسباب الممكنة", h3.InnerHtml);
+
+			tn = divDir.ChildNodes[3];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			var ol = divDir.ChildNodes[4];
+			Assert.AreEqual("ol", ol.Name);
+			Assert.AreEqual(0, ol.Attributes.Count);
+			Assert.AreEqual(5, ol.ChildNodes.Count);
+
+			tn = ol.ChildNodes[0];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			var li = ol.ChildNodes[1];
+			Assert.AreEqual("li", li.Name);
+			Assert.AreEqual(1, li.Attributes.Count);
+			Assert.AreEqual("integrity.causes.1", li.Attributes["i18n"].Value);
+			Assert.AreEqual(3, li.ChildNodes.Count);
+
+			tn = li.ChildNodes[0];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			var para = li.ChildNodes[1];
+			Assert.AreEqual("p", para.Name);
+			Assert.AreEqual(3, para.Attributes.Count);
+			Assert.AreEqual("rtl", para.Attributes["dir"].Value);
+			Assert.AreEqual("ar", para.Attributes["lang"].Value);
+			Assert.AreEqual("ar", para.Attributes["xml:lang"].Value);
+			Assert.AreEqual("ربما قام مكافح الفيروسات بعزل ملف واحد أو أكثر من ملفات Bloom.", para.InnerHtml);
+
+			tn = li.ChildNodes[2];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			tn = ol.ChildNodes[2];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			li = ol.ChildNodes[3];
+			Assert.AreEqual("li", li.Name);
+			Assert.AreEqual(1, li.Attributes.Count);
+			Assert.AreEqual("integrity.causes.2", li.Attributes["i18n"].Value);
+			Assert.AreEqual(3, li.ChildNodes.Count);
+
+			tn = li.ChildNodes[0];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			para = li.ChildNodes[1];
+			Assert.AreEqual("p", para.Name);
+			Assert.AreEqual("rtl", para.Attributes["dir"].Value);
+			Assert.AreEqual("ar", para.Attributes["lang"].Value);
+			Assert.AreEqual("ar", para.Attributes["xml:lang"].Value);
+			Assert.AreEqual("ربما قام مشرف الكمبيوتر بقفل الكمبيوتر لمنع القيام بأنشطة سيئة، وأدى ذلك إلى تعذر Bloom عن وضع الملفات في المكان المناسب.", para.InnerHtml);
+
+			tn = li.ChildNodes[2];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
+
+			tn = ol.ChildNodes[4];
+			Assert.AreEqual(HtmlNodeType.Text, tn.NodeType);
+			Assert.IsTrue(String.IsNullOrWhiteSpace(tn.InnerHtml));
 		}
 
 		void CheckForEmptyEvenNumberedTextChildNodes(HtmlNode node)

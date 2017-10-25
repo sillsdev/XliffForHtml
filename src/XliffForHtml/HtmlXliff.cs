@@ -33,6 +33,9 @@ namespace XliffForHtml
 		public const string kSilNamespace = "http://sil.org/software/XLiff";
 
 		private readonly string _originalHtml;
+		/// <summary>
+		/// The simple filename (without the full path) used for the "original" attribute.
+		/// </summary>
 		private readonly string _originalFilename;
 
 		/// <summary>
@@ -71,8 +74,19 @@ namespace XliffForHtml
 		private HtmlXliff(string html, string filename)
 		{
 			_originalHtml = html;
-			_originalFilename = filename;
-
+			_originalFilename = Path.GetFileName(filename);
+			// Crowdin behaves very badly if the original attribute ever changes.  (It deletes all the translations.)
+			// Bloom has two files that got created and added to crowdin when this program momentarily handled markdown
+			// input.  We decided that was a mistake because every markdown processor handles extensions differently
+			// and the best processor we've found so far is in javascript and thus most useful at build time instead
+			// of runtime.  To prevent possible problems in managing Bloom translations, we preserve these two
+			// filenames as being markdown instead of HTML.  (This is what happens when people insist on flying the
+			// airplane while it's still being built...)
+			if (filename.EndsWith("/DistFiles/IntegrityFailureAdvice-en.htm") ||
+				filename.EndsWith("/DistFiles/infoPages/TrainingVideos-en.htm"))
+			{
+				_originalFilename = Path.ChangeExtension(_originalFilename, "md");
+			}
 			// Fix an HtmlAgility parser bug: form isn't always empty. We can't use a newer version of HtmlAgility
 			// which appears to fix this bug (and maybe others) because it won't work with either Mono 4 or even
 			// Mono 5.  But the code leaves a gaping visibility hole that lets us fix it at runtime...
@@ -135,7 +149,7 @@ namespace XliffForHtml
 
 			var file = _xliffDoc.CreateElement("file");
 			xliff.AppendChild(file);
-			file.SetAttribute("original", Path.GetFileName(_originalFilename));
+			file.SetAttribute("original", _originalFilename);
 			file.SetAttribute("datatype", "html");
 			file.SetAttribute("source-language", "en");
 

@@ -114,11 +114,11 @@ namespace XliffForHtml
 					Console.Write("Replace the input html file? [y/N] ");
 					var inline = Console.ReadLine();
 					if (inline.StartsWith("Y") || inline.StartsWith("y"))
-						hdoc.Save(outputFile);
+						hdoc.Save(outputFile, System.Text.Encoding.UTF8);
 				}
 				else
 				{
-					hdoc.Save(outputFile);
+					hdoc.Save(outputFile, System.Text.Encoding.UTF8);
 				}
 			}
 		}

@@ -599,6 +599,8 @@ namespace XliffForHtml
 			case "ur":	// Urdu
 			case "he":	// Hebrew
 			case "dv":	// Divehi/Dhivehi/Maldivian
+			case "pbu":	// Northern Pashto
+			case "prs":	// Dari
 				return true;
 			default:
 				// Check for known RTL scripts expressly contained in the language code

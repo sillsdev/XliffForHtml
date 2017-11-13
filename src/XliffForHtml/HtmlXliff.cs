@@ -291,6 +291,11 @@ namespace XliffForHtml
 				if (node.NodeType == HtmlNodeType.Text)
 				{
 					var text = HttpUtility.HtmlDecode(node.InnerText);
+					// markdown-it produces files with \n line endings even on Windows from
+					// input files that use \r\n line endings.  We need to maintain \r\n line
+					// ending throughout the xliff file on Windows, even in quoted text.
+					if (text != null && text.Contains("\n") && !text.Contains(Environment.NewLine))
+						text = text.Replace("\n", Environment.NewLine);
 					var tn = _xliffDoc.CreateTextNode(text);
 					newXliffElement.AppendChild(tn);
 				}

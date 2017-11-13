@@ -132,8 +132,8 @@ namespace XliffForHtml
 		private static void Usage()
 		{
 			Console.WriteLine("Usage: HtmlXliff [options] htmlfile");
-			Console.WriteLine("       -e|--extract = extract translations from xliff file [default]");
-			Console.WriteLine("       -i|--inject = inject translations from xliff file");
+			Console.WriteLine("       -e|--extract = extract strings to translate from html file [default]");
+			Console.WriteLine("       -i|--inject = inject translations from xliff file to create translated html file");
 			Console.WriteLine("       -v|--verbose = display warnings for missing translations (ignored if extracting)");
 			Console.WriteLine("       -f|--folder <lang> = the xliff file is in a subfolder named <lang> (ignored if -x or -o specified)");
 			Console.WriteLine("       -x|--xliff <file> = specify xliff file path (ignored if extracting and -o specified)");

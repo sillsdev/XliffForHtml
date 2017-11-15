@@ -486,34 +486,33 @@ namespace XliffForHtml
 			var htmlDoc = new HtmlDocument();
 			htmlDoc.LoadHtml(_originalHtml);
 			if (_rtl)
-				InsertRtlDiv(htmlDoc);
+				MarkHtmlBodyAsRtl(htmlDoc);
 			TranslateHtmlElement(htmlDoc.DocumentNode);
 			return htmlDoc;
 		}
 
-		private void InsertRtlDiv(HtmlDocument htmlDoc)
+		private void MarkHtmlBodyAsRtl(HtmlDocument htmlDoc)
 		{
-			var divNode = htmlDoc.CreateElement("div");
-			divNode.SetAttributeValue("dir", "rtl");
-			divNode.SetAttributeValue("lang", _targetLanguage);
-			divNode.SetAttributeValue("xml:lang", _targetLanguage);
 			var docNode = htmlDoc.DocumentNode;
-			HtmlNode bodyNode;
-			if (docNode.FirstChild.Name == "html")
+			var bodyNode = docNode.SelectSingleNode("/html/body");
+			if (bodyNode == null)
 			{
-				bodyNode = docNode.SelectSingleNode("/html/body");
-			}
-			else if (docNode.FirstChild.Name == "body")
-			{
-				bodyNode = docNode.FirstChild;
+				// Markdown generated files do not have the html and body elements, so surround
+				// what we have with a div element marked appropriately for RTL
+				var divNode = htmlDoc.CreateElement("div");
+				divNode.SetAttributeValue("dir", "rtl");
+				divNode.SetAttributeValue("lang", _targetLanguage);
+				divNode.SetAttributeValue("xml:lang", _targetLanguage);
+				divNode.AppendChildren(docNode.ChildNodes);
+				docNode.ChildNodes.Clear();
+				docNode.AppendChild(divNode);
 			}
 			else
 			{
-				bodyNode = docNode;
+				bodyNode.SetAttributeValue("dir", "rtl");
+				bodyNode.SetAttributeValue("lang", _targetLanguage);
+				bodyNode.SetAttributeValue("xml:lang", _targetLanguage);
 			}
-			divNode.AppendChildren(bodyNode.ChildNodes);
-			bodyNode.ChildNodes.Clear();
-			bodyNode.AppendChild(divNode);
 		}
 
 		private void TranslateHtmlElement(HtmlNode htmlElement)

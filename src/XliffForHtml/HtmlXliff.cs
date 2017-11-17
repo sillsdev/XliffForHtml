@@ -486,34 +486,41 @@ namespace XliffForHtml
 			var htmlDoc = new HtmlDocument();
 			htmlDoc.LoadHtml(_originalHtml);
 			if (_rtl)
-				InsertRtlDiv(htmlDoc);
+				MarkGlobalDocumentProperties(htmlDoc);
 			TranslateHtmlElement(htmlDoc.DocumentNode);
 			return htmlDoc;
 		}
 
-		private void InsertRtlDiv(HtmlDocument htmlDoc)
+		/// <summary>
+		/// Record the RTL (and lang) properties of the data in the HTML file. Normally these are set as attributes
+		/// of the body element. However, some input (typically from Markdown) is HTML fragments and does not have
+		/// a body. In such cases, we wrap the current content an an additional div and put the attributes on that.
+		/// </summary>
+		/// <remarks>
+		/// This is called only for RTL languages.
+		/// </remarks>
+		private void MarkGlobalDocumentProperties(HtmlDocument htmlDoc)
 		{
-			var divNode = htmlDoc.CreateElement("div");
-			divNode.SetAttributeValue("dir", "rtl");
-			divNode.SetAttributeValue("lang", _targetLanguage);
-			divNode.SetAttributeValue("xml:lang", _targetLanguage);
 			var docNode = htmlDoc.DocumentNode;
-			HtmlNode bodyNode;
-			if (docNode.FirstChild.Name == "html")
+			var bodyNode = docNode.SelectSingleNode("/html/body");
+			if (bodyNode == null)
 			{
-				bodyNode = docNode.SelectSingleNode("/html/body");
-			}
-			else if (docNode.FirstChild.Name == "body")
-			{
-				bodyNode = docNode.FirstChild;
+				// Markdown generated files do not have the html and body elements, so surround
+				// what we have with a div element marked appropriately for RTL
+				var divNode = htmlDoc.CreateElement("div");
+				divNode.SetAttributeValue("dir", "rtl");
+				divNode.SetAttributeValue("lang", _targetLanguage);
+				divNode.SetAttributeValue("xml:lang", _targetLanguage);
+				divNode.AppendChildren(docNode.ChildNodes);
+				docNode.ChildNodes.Clear();
+				docNode.AppendChild(divNode);
 			}
 			else
 			{
-				bodyNode = docNode;
+				bodyNode.SetAttributeValue("dir", "rtl");
+				bodyNode.SetAttributeValue("lang", _targetLanguage);
+				bodyNode.SetAttributeValue("xml:lang", _targetLanguage);
 			}
-			divNode.AppendChildren(bodyNode.ChildNodes);
-			bodyNode.ChildNodes.Clear();
-			bodyNode.AppendChild(divNode);
 		}
 
 		private void TranslateHtmlElement(HtmlNode htmlElement)

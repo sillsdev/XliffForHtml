@@ -5,6 +5,7 @@ using System.Xml;
 using NUnit.Framework;
 using HtmlAgilityPack;
 using XliffForHtml;
+using System.Collections.Generic;
 
 namespace XliffForHtmlTests
 {
@@ -1495,5 +1496,111 @@ face</g>.</source>
 				Assert.IsTrue(String.IsNullOrWhiteSpace(node.ChildNodes[i].InnerText));
 			}
 		}
+
+		[Test]
+		public void TestDeobfuscateEmailAddresses()
+		{
+			var obfuscateData = new List<string[]>();
+			obfuscateData.Add(new string[] { "yname@now", "yREMOVEname@noTHISw" });
+			var injector = HtmlXliff.Parse(@"<html>
+ <body>
+  <p i18n=""contact.us"">Contact us: <a href=""mailto:myname@nowhere.com"">myname@nowhere.com</a>.</p>
+ </body>
+</html>");
+			var xliffDoc = new XmlDocument();
+			xliffDoc.LoadXml(@"<?xml version=""1.0"" encoding=""utf-8""?>
+<xliff version=""1.2"" xmlns=""urn:oasis:names:tc:xliff:document:1.2"" xmlns:html=""http://www.w3.org/TR/html"" xmlns:sil=""http://sil.org/software/XLiff"">
+ <file original=""test.html"" datatype=""html"" source-language=""en"" target-language=""es"">
+  <body>
+   <trans-unit id=""contact.us"">
+    <source xml:lang=""en"">Contact us: <g id=""genid-1"" ctype=""x-html-a"" html:href=""mailto:myREMOVEname@noTHISwhere.com"">myREMOVEname@noTHISwhere.com</g>.</source>
+    <target xml:lang=""es"">Contáctenos: <g id=""genid-1"" ctype=""x-html-a"" html:href=""mailto:myREMOVEname@noTHISwhere.com"">myREMOVEname@noTHISwhere.com</g>.</target>
+    <note>ID: contact.us</note>
+   </trans-unit>
+  </body>
+ </file>
+</xliff>");
+			var translatedHtml = injector.InjectTranslations(xliffDoc, true);
+			Assert.IsNotNull(translatedHtml);
+
+			Assert.AreEqual(1, translatedHtml.DocumentNode.ChildNodes.Count);
+			var htmlNode = translatedHtml.DocumentNode.ChildNodes[0];
+			Assert.AreEqual("html", htmlNode.Name);
+			Assert.AreEqual(0, htmlNode.Attributes.Count);
+			Assert.AreEqual(3, htmlNode.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(htmlNode);
+
+			var bodyNode = htmlNode.ChildNodes[1];
+			Assert.AreEqual("body", bodyNode.Name);
+			Assert.AreEqual(0, bodyNode.Attributes.Count);
+			Assert.AreEqual(3, bodyNode.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(bodyNode);
+
+			var paraNode = bodyNode.ChildNodes[1];
+			Assert.AreEqual(3, paraNode.Attributes.Count);
+			Assert.AreEqual("contact.us", paraNode.Attributes["i18n"].Value);
+			Assert.AreEqual("es", paraNode.Attributes["lang"].Value);
+			Assert.AreEqual("es", paraNode.Attributes["xml:lang"].Value);
+			Assert.AreEqual(3, paraNode.ChildNodes.Count);
+
+			var t1Node = paraNode.ChildNodes[0];
+			Assert.AreEqual(HtmlNodeType.Text, t1Node.NodeType);
+			Assert.AreEqual("Contáctenos: ", t1Node.InnerHtml);
+
+			var aNode = paraNode.ChildNodes[1];
+			Assert.AreEqual(HtmlNodeType.Element, aNode.NodeType);
+			Assert.AreEqual("a", aNode.Name);
+			Assert.AreEqual(1, aNode.Attributes.Count);
+			Assert.AreEqual("mailto:myREMOVEname@noTHISwhere.com", aNode.Attributes["href"].Value);
+			Assert.AreEqual(1, aNode.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, aNode.FirstChild.NodeType);
+			Assert.AreEqual("myREMOVEname@noTHISwhere.com", aNode.FirstChild.InnerHtml);
+
+			var t2Node = paraNode.ChildNodes[2];
+			Assert.AreEqual(HtmlNodeType.Text, t2Node.NodeType);
+			Assert.AreEqual(".", t2Node.InnerHtml);
+
+			var htmlDoc = HtmlXliff.DeobfuscateEmailAddresses(translatedHtml, obfuscateData);
+			Assert.IsNotNull(htmlDoc);
+
+			Assert.AreNotEqual(translatedHtml.DocumentNode.OuterHtml, htmlDoc.DocumentNode.OuterHtml);
+
+			Assert.AreEqual(1, htmlDoc.DocumentNode.ChildNodes.Count);
+			htmlNode = htmlDoc.DocumentNode.ChildNodes[0];
+			Assert.AreEqual("html", htmlNode.Name);
+			Assert.AreEqual(0, htmlNode.Attributes.Count);
+			Assert.AreEqual(3, htmlNode.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(htmlNode);
+
+			bodyNode = htmlNode.ChildNodes[1];
+			Assert.AreEqual("body", bodyNode.Name);
+			Assert.AreEqual(0, bodyNode.Attributes.Count);
+			Assert.AreEqual(3, bodyNode.ChildNodes.Count);
+			CheckForEmptyEvenNumberedTextChildNodes(bodyNode);
+
+			paraNode = bodyNode.ChildNodes[1];
+			Assert.AreEqual(3, paraNode.Attributes.Count);
+			Assert.AreEqual("contact.us", paraNode.Attributes["i18n"].Value);
+			Assert.AreEqual("es", paraNode.Attributes["lang"].Value);
+			Assert.AreEqual("es", paraNode.Attributes["xml:lang"].Value);
+			Assert.AreEqual(3, paraNode.ChildNodes.Count);
+
+			t1Node = paraNode.ChildNodes[0];
+			Assert.AreEqual(HtmlNodeType.Text, t1Node.NodeType);
+			Assert.AreEqual("Contáctenos: ", t1Node.InnerHtml);
+
+			aNode = paraNode.ChildNodes[1];
+			Assert.AreEqual(HtmlNodeType.Element, aNode.NodeType);
+			Assert.AreEqual("a", aNode.Name);
+			Assert.AreEqual(1, aNode.Attributes.Count);
+			Assert.AreEqual("mailto:myname@nowhere.com", aNode.Attributes["href"].Value);
+			Assert.AreEqual(1, aNode.ChildNodes.Count);
+			Assert.AreEqual(HtmlNodeType.Text, aNode.FirstChild.NodeType);
+			Assert.AreEqual("myname@nowhere.com", aNode.FirstChild.InnerHtml);
+
+			t2Node = paraNode.ChildNodes[2];
+			Assert.AreEqual(HtmlNodeType.Text, t2Node.NodeType);
+			Assert.AreEqual(".", t2Node.InnerHtml);
+			}
 	}
 }

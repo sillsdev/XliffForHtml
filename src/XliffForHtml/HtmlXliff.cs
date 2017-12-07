@@ -32,7 +32,7 @@ namespace XliffForHtml
 		public const string kHtmlNamespace = "http://www.w3.org/TR/html";	// probably bogus but good enough?
 		public const string kSilNamespace = "http://sil.org/software/XLiff";
 
-		private readonly string _originalHtml;
+		private string _originalHtml;
 		/// <summary>
 		/// The simple filename (without the full path) used for the "original" attribute.
 		/// </summary>
@@ -712,6 +712,43 @@ namespace XliffForHtml
 			default:
 				return null;
 			}
+		}
+
+		/// <summary>
+		/// Obfuscates the given email addresses in the given way.  This must be called after the HtmlXliff
+		/// object is created and intialized with HTML data, but before calling either Extract() or
+		/// InjectTranslations().
+		/// </summary>
+		/// <param name="obfuscateData">List of pairs of strings, first the plain text string and second the obfuscated string</param>
+		public void ObfuscateEmailAddresses(List<string[]> obfuscateData)
+		{
+			foreach (var pair in obfuscateData)
+				_originalHtml = _originalHtml.Replace(pair[0], pair[1]);
+		}
+
+		/// <summary>
+		/// Deobfuscates the email addresses in the HtmlDocument, returning either the same HtmlDocument if unchanged
+		/// or a new HtmlDocument with the plaintext email addresses.
+		/// </summary>
+		/// <param name="obfuscateData">List of pairs of strings, first the plain text string and second the obfuscated string</param>
+		public static HtmlDocument DeobfuscateEmailAddresses(HtmlDocument hdoc, List<string[]> obfuscateData)
+		{
+			var html = hdoc.DocumentNode.OuterHtml;
+			var newhtml = DeobfuscateString(html, obfuscateData);
+			if (html != newhtml)
+			{
+				var hdocNew = new HtmlDocument();
+				hdocNew.LoadHtml(newhtml);
+				return hdocNew;
+			}
+			return hdoc;
+		}
+
+		private static string DeobfuscateString(string val, List<string[]> obfuscateData)
+		{
+			foreach (var pair in obfuscateData)
+				val = val.Replace(pair[1], pair[0]);
+			return val;
 		}
 	}
 }

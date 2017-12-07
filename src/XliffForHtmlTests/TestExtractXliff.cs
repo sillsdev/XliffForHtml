@@ -7,6 +7,7 @@ using System.Xml.Schema;
 using NUnit.Framework;
 using HtmlAgilityPack;
 using XliffForHtml;
+using System.Collections.Generic;
 
 namespace XliffForHtmlTests
 {
@@ -1244,6 +1245,77 @@ face", n0.FirstChild.InnerText);
 			{
 				Assert.Fail(errorMessageFormat, e.Message);
 			}
+		}
+
+		[Test]
+		public void TestObfuscatingEmailAddresses()
+		{
+			var obfuscateData = new List<string[]>();
+			obfuscateData.Add(new string[] { "yname@now", "yREMOVEname@noTHISw" });
+			var extractor = HtmlXliff.Parse(@"<html>
+ <body>
+  <p i18n=""contact.us"">Contact us: <a href=""mailto:myname@nowhere.com"">myname@nowhere.com</a>.</p>
+ </body>
+</html>");
+			/* Expected output (ignore extraneous whitespace)
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:html="http://www.w3.org/TR/html" xmlns:sil="http://sil.org/software/XLiff">
+ <file original="test.html" datatype="html" source-language="en">
+  <body>
+   <trans-unit id="contact.us">
+    <source xml:lang="en">Contact us: <g id="genid-1" ctype="x-html-a" html:href="mailto:myREMOVEname@noTHISwhere.com">myREMOVEname@noTHISwhere.com</g>.</source>
+    <target/>
+    <note>ID: contact.us</note>
+   </trans-unit>
+  </body>
+ </file>
+</xliff>*/
+			extractor.ObfuscateEmailAddresses(obfuscateData);
+			var xmlDoc = extractor.Extract();
+			Assert.IsNotNull(xmlDoc);
+			ValidateXliffOutput(xmlDoc.OuterXml, "Xliff for TestObfuscatingEmailAddresses did not validate against schema: {0}");
+
+			var body = xmlDoc.SelectSingleNode("/xliff/file/body");
+			Assert.IsNotNull(body);
+
+			Assert.AreEqual(1, body.ChildNodes.Count);
+			var tu = body.ChildNodes[0];
+			Assert.AreEqual("trans-unit", tu.Name);
+			Assert.AreEqual(1, tu.Attributes.Count);
+			Assert.AreEqual("contact.us", tu.Attributes["id"].Value);
+			Assert.AreEqual(3, tu.ChildNodes.Count);
+
+			var source = tu.ChildNodes[0];
+			Assert.AreEqual("source", source.Name);
+			Assert.AreEqual(1, source.Attributes.Count);
+			Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
+			Assert.AreEqual(3, source.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, source.FirstChild.NodeType);
+			Assert.AreEqual("Contact us: ", source.FirstChild.OuterXml);
+			var gn = source.ChildNodes[1];
+			Assert.AreEqual(XmlNodeType.Element, gn.NodeType);
+			Assert.AreEqual("g", gn.Name);
+			Assert.AreEqual(3, gn.Attributes.Count);
+			Assert.AreEqual("genid-1", gn.Attributes["id"].Value);
+			Assert.AreEqual("x-html-a", gn.Attributes["ctype"].Value);
+			Assert.AreEqual("mailto:myREMOVEname@noTHISwhere.com", gn.Attributes["href", HtmlXliff.kHtmlNamespace].Value);
+			Assert.AreEqual(1, gn.ChildNodes.Count);
+			Assert.AreEqual(XmlNodeType.Text, gn.FirstChild.NodeType);
+			Assert.AreEqual("myREMOVEname@noTHISwhere.com", gn.FirstChild.OuterXml);
+
+			var fn = source.ChildNodes[2];
+			Assert.AreEqual(XmlNodeType.Text, fn.NodeType);
+			Assert.AreEqual(".", fn.OuterXml);
+
+			var target = tu.ChildNodes[1];
+			Assert.AreEqual("target", target.Name);
+			Assert.AreEqual(0, target.Attributes.Count);
+			Assert.AreEqual("", target.InnerXml);
+
+			var note = tu.ChildNodes[2];
+			Assert.AreEqual("note", note.Name);
+			Assert.AreEqual(0, note.Attributes.Count);
+			Assert.AreEqual("ID: contact.us", note.InnerXml);
 		}
 	}
 }

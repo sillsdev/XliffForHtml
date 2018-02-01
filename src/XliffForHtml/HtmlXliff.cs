@@ -370,10 +370,11 @@ namespace XliffForHtml
 		{
 			foreach (var attr in html.Attributes)
 			{
+				var value = System.Web.HttpUtility.HtmlDecode(attr.Value);
 				if (attr.Name == "lang")
-					xml.SetAttribute("xml:" + attr.Name, attr.Value);	// colon allowed for xml:lang attribute
+					xml.SetAttribute("xml:" + attr.Name, value);	// colon allowed for xml:lang attribute
 				else
-					xml.SetAttribute(attr.Name, kHtmlNamespace, attr.Value);
+					xml.SetAttribute(attr.Name, kHtmlNamespace, value);
 			}
 		}
 

@@ -714,6 +714,64 @@ namespace XliffForHtml
 				return null;
 			}
 		}
+
+		/// <summary>
+		/// Save the new xliff file, optionally preserving notes found in an existing xliff file
+		/// that may or may not be overwritten.
+		/// </summary>
+		public static void SaveXliffFile(XmlDocument newXliff, string outputFile, bool preserve = false, string oldFile = null)
+		{
+			if (!preserve || String.IsNullOrEmpty(oldFile) || !File.Exists(oldFile))
+			{
+				newXliff.Save(outputFile);
+				return;
+			}
+			var oldXliff = new XmlDocument();
+			oldXliff.Load(oldFile);
+			CopyMissingNotesToNewXliff(newXliff, oldXliff);
+			newXliff.Save(outputFile);
+		}
+
+		/// <summary>
+		/// Any note elements found in the old xliff document that are missing in the new xliff document
+		/// are copied to the new xliff document.
+		/// </summary>
+		public static void CopyMissingNotesToNewXliff(XmlDocument newXliff, XmlDocument oldXliff)
+		{
+			// newXliff doesn't need a namespace manager because of the way HtmlXliff.Extract()
+			// creates the document.  However, oldXliff does need a namespace manager because it
+			// is created by loading existing XML that specifies namespaces.  Don't blame me for
+			// this baffling difference.
+			var oldNsmgr = new XmlNamespaceManager(oldXliff.NameTable);
+			oldNsmgr.AddNamespace("x", kXliffNamespace);
+			oldNsmgr.AddNamespace("html", kHtmlNamespace);
+			oldNsmgr.AddNamespace("sil", kSilNamespace);
+
+			var newUnits = newXliff.SelectNodes("/xliff/file/body//trans-unit");
+			foreach (XmlNode tu in newUnits)
+			{
+				var id = tu.Attributes["id"].Value;
+				var oldNotes = oldXliff.SelectNodes("/x:xliff/x:file/x:body//x:trans-unit[@id='"+id+"']/x:note", oldNsmgr);
+				foreach (XmlNode oldNote in oldNotes)
+				{
+					var hasNote = false;
+					//foreach (XmlNode note in tu.SelectNodes("x:note", newNsmgr))
+					foreach (XmlNode note in tu.SelectNodes("note"))
+					{
+						if (oldNote.InnerXml == note.InnerXml)
+						{
+							hasNote = true;
+							break;
+						}
+					}
+					if (hasNote)
+						continue;
+					var newNote = newXliff.CreateElement("note");
+					newNote.InnerXml = oldNote.InnerXml;
+					tu.AppendChild(newNote);
+				}
+			}
+		}
 	}
 }
 

@@ -1363,6 +1363,106 @@ which is at <g id="genid-1" ctype="x-html-strong">{{installFolder}}</g>.</source
 			Assert.AreEqual(XmlNodeType.Text, src.ChildNodes[0].NodeType);
 			Assert.AreEqual("Others: Google for \"whitelist directory name-of-your-antivirus\"", src.ChildNodes[0].InnerText);
 		}
+
+		[Test]
+		public void TestCopyingNotesFromOldXliff()
+		{
+			// Create the xliff from an original HTML file to mimic program behavior.
+			var extractor = HtmlXliff.Parse(@"<html>
+ <body>
+  <h3 i18n=""epubpreview.recommended.reader"">Recommended Reader</h3>
+  <p class=""showForTalkingBooks"" i18n=""epubpreview.gitden.limits"">Disable Gitden's ""Read aloud (TTS)"" feature.</p>
+  <h3 class=""showWhenNoAudio"" i18n=""epubpreview.make.it.talk"">Make it Talk Aloud</h3>
+  <ul>
+    <li i18n=""integrity.todo.ideas.AVG"">
+      <p>AVG: <a href=""https://support.avg.com/SupportArticleView?l=en_US&amp;urlname=How-to-exclude-file-folder-or-website-from-AVG-scanning"">Instructions from AVG</a>.</p>
+    </li>
+  </ul>
+ </body>
+</html>");
+			var newXliff = extractor.Extract();
+			// Mimic having a previous version of the generated xliff that has a couple
+			// of notes added, and a string that no longer exists in the HTML file.
+			var oldXliff = new XmlDocument();
+			oldXliff.LoadXml(@"<?xml version='1.0' encoding='utf-8'?>
+<xliff version='1.2' xmlns='urn:oasis:names:tc:xliff:document:1.2' xmlns:html='http://www.w3.org/TR/html' xmlns:sil='http://sil.org/software/XLiff'>
+  <file original='testing.html' datatype='html' source-language='en'>
+    <body>
+      <trans-unit id='epubpreview.gitden.limits'>
+        <source xml:lang='en'>Disable Gitden's ""Read aloud (TTS)"" feature.</source>
+        <target />
+        <note>ID: epubpreview.gitden.limits</note>
+        <note>OLD TEXT (Gitden's wording changed): Disable Gitden's ""Text To Speech"" feature.</note>
+      </trans-unit>
+      <trans-unit id='epubpreview.make.it.talk'>
+        <source xml:lang='en'>Make it Talk</source>
+        <target />
+        <note>ID: epubpreview.make.it.talk</note>
+      </trans-unit>
+      <trans-unit id='integrity.title'>
+        <source xml:lang='en'>Bloom cannot find some of its own files, and cannot continue</source>
+        <target />
+        <note>ID: integrity.title</note>
+      </trans-unit>
+      <trans-unit id='integrity.todo.ideas.AVG'>
+        <source xml:lang='en'>AVG: <g id='genid-1' ctype='x-html-a' html:href='https://support.avg.com/SupportArticleView?l=en_US&amp;urlname=How-to-exclude-file-folder-or-website-from-AVG-scanning'>Instructions from AVG</g>.</source>
+        <target />
+        <note>ID: integrity.todo.ideas.AVG</note>
+        <note>The former source text had an incorrect &amp;amp; following l=en_US in the href attribute value.</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>");
+			HtmlXliff.CopyMissingNotesToNewXliff(newXliff, oldXliff);
+
+			var units = newXliff.SelectNodes("/xliff/file/body/trans-unit");
+			Assert.AreEqual(4, units.Count);
+
+			CheckXliffWithNotes(units.Item(0), "epubpreview.recommended.reader", 3, "Recommended Reader",
+				new [] {"ID: epubpreview.recommended.reader"});
+			CheckXliffWithNotes(units.Item(1), "epubpreview.gitden.limits", 4, "Disable Gitden's \"Read aloud (TTS)\" feature.",
+				new [] {"ID: epubpreview.gitden.limits", "OLD TEXT (Gitden's wording changed): Disable Gitden's \"Text To Speech\" feature."});
+			CheckXliffWithNotes(units.Item(2), "epubpreview.make.it.talk", 3, "Make it Talk Aloud",
+				new [] {"ID: epubpreview.make.it.talk"});
+			var tu = units.Item(3);
+			CheckXliffWithNotes(tu, "integrity.todo.ideas.AVG", 4, null,
+				new [] {"ID: integrity.todo.ideas.AVG", "The former source text had an incorrect &amp;amp; following l=en_US in the href attribute value."});
+			// more complex source element to check
+			var source = tu.ChildNodes.Item(0);
+			Assert.AreEqual(3, source.ChildNodes.Count);
+			Assert.AreEqual("AVG: ", source.ChildNodes.Item(0).Value);
+			var g = source.ChildNodes.Item(1);
+			Assert.AreEqual("g", g.Name);
+			Assert.AreEqual(3, g.Attributes.Count);
+			Assert.AreEqual("genid-1", g.Attributes["id"].Value);
+			Assert.AreEqual("x-html-a", g.Attributes["ctype"].Value);
+			Assert.AreEqual("https://support.avg.com/SupportArticleView?l=en_US&urlname=How-to-exclude-file-folder-or-website-from-AVG-scanning", g.Attributes["href", HtmlXliff.kHtmlNamespace].Value);
+			Assert.AreEqual("Instructions from AVG", g.InnerXml);
+			Assert.AreEqual(".", source.ChildNodes.Item(2).Value);
+		}
+
+		private void CheckXliffWithNotes(XmlNode tu, string id, int childCount, string sourceText, string[] notes)
+		{
+			Assert.AreEqual(id, tu.Attributes["id"].Value);
+			Assert.AreEqual(childCount, tu.ChildNodes.Count);
+			var source = tu.ChildNodes.Item(0);
+			Assert.AreEqual("source", source.Name);
+			Assert.AreEqual(1, source.Attributes.Count);
+			Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
+			if (!String.IsNullOrEmpty(sourceText))
+				Assert.AreEqual(sourceText, source.InnerXml);
+			var target = tu.ChildNodes.Item(1);
+			Assert.AreEqual("target", target.Name);
+			Assert.AreEqual(0, target.Attributes.Count);
+			Assert.AreEqual("", target.InnerXml);
+			for (int i = 0; i < notes.Length; ++i)
+			{
+				var note = tu.ChildNodes.Item(i+2);
+				Assert.AreEqual("note", note.Name);
+				Assert.AreEqual(0, note.Attributes.Count);
+				Assert.AreEqual(notes[i], note.InnerXml);
+			}
+		}
 	}
 }
 

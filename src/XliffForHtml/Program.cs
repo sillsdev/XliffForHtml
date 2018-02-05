@@ -2,6 +2,7 @@
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT)
 using System;
 using System.IO;
+using System.Xml;
 
 namespace XliffForHtml
 {
@@ -16,6 +17,7 @@ namespace XliffForHtml
 			string xliffFile = null;
 			string outputFile = null;
 			bool verboseWarnings = false;
+			bool preserveNotes = false;
 			var langDir = "en";		// unless user changes it.
 			for (int i = 0; i < args.Length; ++i)
 			{
@@ -58,6 +60,10 @@ namespace XliffForHtml
 				{
 					verboseWarnings = true;
 				}
+				else if (args[i] == "-p" || args[i] == "--preserve")
+				{
+					preserveNotes = true;
+				}
 				else if (htmlFile == null)
 				{
 					htmlFile = args[i];
@@ -98,7 +104,7 @@ namespace XliffForHtml
 					outputFile = xliffFile;
 				EnsureOutputDirectoryExists(Path.GetDirectoryName(outputFile));
 				if (xdoc != null)
-					xdoc.Save(outputFile);
+					HtmlXliff.SaveXliffFile(xdoc, outputFile, preserveNotes, outputFile);
 				else
 					Console.WriteLine("Nothing was tagged with a data-i18n or i18n attribute in the input file \"{0}\"", htmlFile);
 			}
@@ -135,6 +141,7 @@ namespace XliffForHtml
 			Console.WriteLine("       -e|--extract = extract strings to translate from html file [default]");
 			Console.WriteLine("       -i|--inject = inject translations from xliff file to create translated html file");
 			Console.WriteLine("       -v|--verbose = display warnings for missing translations (ignored if extracting)");
+			Console.WriteLine("       -p|--preserve = when extracting, preserve notes from existing xliff file if possible");
 			Console.WriteLine("       -f|--folder <lang> = the xliff file is in a subfolder named <lang> (ignored if -x or -o specified)");
 			Console.WriteLine("       -x|--xliff <file> = specify xliff file path (ignored if extracting and -o specified)");
 			Console.WriteLine("       -o|--output <file> = specify output file path");

@@ -82,8 +82,8 @@ namespace XliffForHtml
 			// of runtime.  To prevent possible problems in managing Bloom translations, we preserve these two
 			// filenames as being markdown instead of HTML.  (This is what happens when people insist on flying the
 			// airplane while it's still being built...)
-			if (filename.Replace("\\","/").EndsWith("/DistFiles/IntegrityFailureAdvice-en.htm") ||
-				filename.Replace("\\","/").EndsWith("/DistFiles/infoPages/TrainingVideos-en.htm"))
+			if (filename.Replace("\\","/").EndsWith("/help/IntegrityFailureAdvice-en.htm") ||
+				filename.Replace("\\","/").EndsWith("/infoPages/TrainingVideos-en.htm"))
 			{
 				_originalFilename = Path.ChangeExtension(_originalFilename, "md");
 			}

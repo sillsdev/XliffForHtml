@@ -7,6 +7,7 @@ using System.Xml.Schema;
 using NUnit.Framework;
 using HtmlAgilityPack;
 using XliffForHtml;
+using System.Text;
 
 namespace XliffForHtmlTests
 {
@@ -1462,6 +1463,369 @@ which is at <g id="genid-1" ctype="x-html-strong">{{installFolder}}</g>.</source
 				Assert.AreEqual(0, note.Attributes.Count);
 				Assert.AreEqual(notes[i], note.InnerXml);
 			}
+		}
+
+		/// <summary>
+		/// First test that only the global html: namespace tag is used for extracted elements instead of local
+		/// per-element namepace declaration and prefix imposed by XmlNode.InnerXml.
+		/// </summary>
+		/// <remarks>
+		/// The sil: namespace should never be encountered in extracting XLIFF from HTML.
+		/// </remarks>
+		[Test]
+		public void TestNamespaceFixing1()
+		{
+			var extractor = HtmlXliff.Parse(@"<html>
+<body>
+<h3 i18n=""integrity.todo"">What To Do</h3>
+<ul>
+<li i18n=""integrity.todo.ideas.Antivirus"">
+<p>Note 1 &lt; 2 &amp; 2 &gt; 1!  If the &quot;Missing Files&quot; section below shows any files which end in &quot;.exe&quot;,  consider &quot;whitelisting&quot; the Bloom program folder, which is at <strong>{{installFolder}}</strong>.</p>
+<ul>
+<li i18n=""integrity.todo.ideas.AVAST"">
+<p>AVAST: <a href=""http://www.getavast.net/support/managing-exceptions"">Instructions</a>.</p>
+</li>
+<li i18n=""integrity.todo.ideas.Norton"">
+<p>Norton Antivirus: <a href=""https://support.symantec.com/en_US/article.HOWTO80920.html"">Instructions from Symantec</a>.</p>
+</li>
+</ul>
+</body>
+</html>");
+			/* Expected output (ignore extraneous whitespace)
+			<?xml version="1.0" encoding="utf-8"?>
+			<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:html="http://www.w3.org/TR/html" xmlns:sil="http://sil.org/software/XLiff">
+			  <file original="foo.html" datatype="html" source-language="en">
+				<body>
+				  <trans-unit id="integrity.todo">
+					<source xml:lang="en">What To Do</source>
+					<target />
+					<note>ID: integrity.todo</note>
+				  </trans-unit>
+				  <trans-unit id="integrity.todo.ideas.Antivirus">
+					<source xml:lang="en">Note 1 &lt; 2 &amp; 2 &gt; 1!   If the "Missing Files" section below shows any files which end in ".exe",  consider "whitelisting" the Bloom program folder, which is at <g id="genid-1" ctype="x-html-strong">{{installFolder}}</g>.</source>
+					<target />
+					<note>ID: integrity.todo.ideas.Antivirus</note>
+				  </trans-unit>
+				  <trans-unit id="integrity.todo.ideas.AVAST">
+					<source xml:lang="en">AVAST: <g id="genid-2" ctype="x-html-a" html:href="http://www.getavast.net/support/managing-exceptions">Instructions</g>.</source>
+					<target />
+					<note>ID: integrity.todo.ideas.AVAST</note>
+				  </trans-unit>
+				  <trans-unit id="integrity.todo.ideas.Norton">
+					<source xml:lang="en">Norton Antivirus: <g id="genid-3" ctype="x-html-a" html:href="https://support.symantec.com/en_US/article.HOWTO80920.html">Instructions from Symantec</g>.</source>
+					<target />
+					<note>ID: integrity.todo.ideas.Norton</note>
+				  </trans-unit>
+				</body>
+			  </file>
+			</xliff>
+			*/
+			var xmlDoc = extractor.Extract();
+			Assert.IsNotNull(xmlDoc);
+			ValidateXliffOutput(xmlDoc.OuterXml, "Initial Xliff for TestNamespaceFixing1 did not validate against schema: {0}");
+
+			var xdoc = TestWriteXliff(xmlDoc);
+			ValidateXliffOutput(xdoc.OuterXml, "Cleaned up Xliff for TestNamespaceFixing1 did not validate against schema: {0}");
+
+			var nsmgr = HtmlXliff.CreateNamespaceManager(xdoc);
+			var body = xdoc.SelectSingleNode("/x:xliff/x:file/x:body", nsmgr);
+			Assert.IsNotNull(body);
+			VerifyTransUnitLayout(body, 4);
+
+			// Test that standard character entities are handled properly.
+			var xel = body.SelectSingleNode("./x:trans-unit[@id='integrity.todo.ideas.Antivirus']/x:source", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.That(xel.InnerXml.StartsWith("Note 1 &lt; 2 &amp; 2 &gt; 1!", StringComparison.Ordinal));
+			Assert.That(xel.InnerText.StartsWith("Note 1 < 2 & 2 > 1!", StringComparison.Ordinal));
+
+			// Test that a single HTML namespace attribute is handled correctly, using the global html: prefix
+			// instead of having its own namespace attribute and prefix.
+			xel = body.SelectSingleNode("./x:trans-unit[@id='integrity.todo.ideas.AVAST']/x:source/x:g[@id='genid-2']", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.AreEqual(3, xel.Attributes.Count);
+			Assert.AreEqual("id", xel.Attributes[0].Name);
+			Assert.AreEqual("", xel.Attributes[0].Prefix);
+			Assert.AreEqual("genid-2", xel.Attributes[0].Value);
+			Assert.AreEqual("ctype", xel.Attributes[1].Name);
+			Assert.AreEqual("", xel.Attributes[1].Prefix);
+			Assert.AreEqual("x-html-a", xel.Attributes[1].Value);
+			Assert.AreEqual("html:href", xel.Attributes[2].Name);
+			Assert.AreEqual("html", xel.Attributes[2].Prefix);
+			Assert.AreEqual("http://www.getavast.net/support/managing-exceptions", xel.Attributes[2].Value);
+			Assert.AreEqual("Instructions", xel.InnerXml);
+			Assert.AreEqual("Instructions", xel.InnerText);
+		}
+
+		/// <summary>
+		/// Second test that only the global html: namespace tag is used for extracted elements instead of local
+		/// per-element namepace declaration and prefix imposed by XmlNode.InnerXml.
+		/// </summary>
+		/// <remarks>
+		/// The sil: namespace should never be encountered in extracting XLIFF from HTML.
+		/// </remarks>
+		[Test]
+		public void TestNamespaceFixing2()
+		{
+			var extractor = HtmlXliff.Parse(@"<html>
+<body>
+<p i18n=""template.starter.labelsnottranslatable""><a id=""note3"">3</a>: People will not be able to translate your labels and descriptions into other national languages. If this is a problem, please contact the Bloom team.</p>
+<p i18n=""template.starter.editrawhtml""><a id=""note4"">4</a>: If you want the Add Page screen to also provide a short description of the page, you'll need to quit Bloom and edit the template's html in Notepad, like this: <img src=""ReadMeImages/pageDescription.png"" alt=""pageDescription image""></p>
+</body>
+</html>");
+/* Expected output (ignore extraneous whitespace)
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:html="http://www.w3.org/TR/html" xmlns:sil="http://sil.org/software/XLiff">
+  <file original="foo.html" datatype="html" source-language="en">
+    <body>
+      <trans-unit id="template.starter.labelsnottranslatable">
+        <source xml:lang="en"><g id="genid-1" ctype="x-html-a" html:id="note3">3</g>: People will not be able to translate your labels and descriptions into other national languages. If this is a problem, please contact the Bloom team.</source>
+        <target />
+        <note>ID: template.starter.labelsnottranslatable</note>
+      </trans-unit>
+      <trans-unit id="template.starter.editrawhtml">
+        <source xml:lang="en"><g id="genid-2" ctype="x-html-a" html:id="note4">4</g>: If you want the Add Page screen to also provide a short description of the page, you'll need to quit Bloom and edit the template's html in Notepad, like this: <x id="genid-3" ctype="image" html:src="ReadMeImages/pageDescription.png" html:alt="pageDescription image" /></source>
+        <target />
+        <note>ID: template.starter.editrawhtml</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
+*/
+			var xmlDoc = extractor.Extract();
+			Assert.IsNotNull(xmlDoc);
+			ValidateXliffOutput(xmlDoc.OuterXml, "Xliff for TestNamespaceFixing2 did not validate against schema: {0}");
+
+			var xdoc = TestWriteXliff(xmlDoc);
+			ValidateXliffOutput(xdoc.OuterXml, "Cleaned up Xliff for TestNamespaceFixing2 did not validate against schema: {0}");
+
+			var nsmgr = HtmlXliff.CreateNamespaceManager(xdoc);
+			var body = xdoc.SelectSingleNode("/x:xliff/x:file/x:body", nsmgr);
+			Assert.IsNotNull(body);
+			VerifyTransUnitLayout(body, 2);
+
+			// Test that two HTML namespace attributes in a single element are handled correctly, using the global html: prefix
+			// instead of having a (shared) namespace attribute with a distinct prefix.
+			var xel = body.SelectSingleNode("./x:trans-unit[@id='template.starter.editrawhtml']/x:source/x:x[@id='genid-3']", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.AreEqual(4, xel.Attributes.Count);
+			Assert.AreEqual("id", xel.Attributes[0].Name);
+			Assert.AreEqual("", xel.Attributes[0].Prefix);
+			Assert.AreEqual("genid-3", xel.Attributes[0].Value);
+			Assert.AreEqual("ctype", xel.Attributes[1].Name);
+			Assert.AreEqual("", xel.Attributes[1].Prefix);
+			Assert.AreEqual("image", xel.Attributes[1].Value);
+			Assert.AreEqual("html:src", xel.Attributes[2].Name);
+			Assert.AreEqual("html", xel.Attributes[2].Prefix);
+			Assert.AreEqual("ReadMeImages/pageDescription.png", xel.Attributes[2].Value);
+			Assert.AreEqual("html:alt", xel.Attributes[3].Name);
+			Assert.AreEqual("html", xel.Attributes[3].Prefix);
+			Assert.AreEqual("pageDescription image", xel.Attributes[3].Value);
+			Assert.AreEqual("", xel.InnerXml);
+		}
+
+		/// <summary>
+		/// Third test that only the global html: namespace tag is used for extracted elements instead of local
+		/// per-element namepace declaration and prefix imposed by XmlNode.InnerXml.
+		/// </summary>
+		/// <remarks>
+		/// The sil: namespace should never be encountered in extracting XLIFF from HTML.
+		/// </remarks>
+		[Test]
+		public void TestNamespaceFixing3()
+		{
+			var extractor = HtmlXliff.Parse(@"<html>
+  <body>
+    <h1 id=""Predictability"" i18n=""leveled.reader.predictability"">Predictability</h1>
+    <p i18n=""leveled.reader.repeat.patterns""><em>Predictability</em> in a text means that the reader can guess what would come next. You can increase predictability by using repeated patterns. Here are some patterns you can use:</p>
+    <ul>
+      <li i18n=""leveled.reader.repetition"">Repetition - repeating parts of the text, for example, using the same sentence with each page and just changing one word in the sentence</li>
+      <li i18n=""leveled.reader.sequencing"">Sequencing - a story with a known sequence such as the days of the week or that uses numbers in a pattern</li>
+      <li i18n=""leveled.reader.building.sequence"">Building Sequence - a story with a pattern that is repeated and added to with each new page</li>
+      <li i18n=""leveled.reader.rhyme"">Rhyme - a story with a pattern or sequence that also includes rhyme. For example:
+        <blockquote class=""poetry"">
+          <pre>Brown Bear, Brown Bear, What do you see?
+I see a red bird looking at me.
+Red Bird, Red Bird, What do you see?
+I see a yellow duck looking at me.
+Yellow Duck, Yellow Duck, What do you see?</pre>
+          <div class=""author"">- Bill Martin, Jr. and Eric Carle</div>
+        </blockquote>
+      </li>
+    </ul>
+  </body>
+</html>");
+			/* Expected output (ignore extraneous whitespace)
+			<?xml version="1.0" encoding="utf-8"?>
+			<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:html="http://www.w3.org/TR/html" xmlns:sil="http://sil.org/software/XLiff">
+			  <file original="foo.html" datatype="html" source-language="en">
+				<body>
+				  <trans-unit id="leveled.reader.predictability">
+					<source xml:lang="en">Predictability</source>
+					<target />
+					<note>ID: leveled.reader.predictability</note>
+				  </trans-unit>
+				  <trans-unit id="leveled.reader.repeat.patterns">
+					<source xml:lang="en"><g id="genid-1" ctype="x-html-em">Predictability</g> in a text means that the reader can guess what would come next. You can increase predictability by using repeated patterns. Here are some patterns you can use:</source>
+					<target />
+					<note>ID: leveled.reader.repeat.patterns</note>
+				  </trans-unit>
+				  <trans-unit id="leveled.reader.repetition">
+					<source xml:lang="en">Repetition - repeating parts of the text, for example, using the same sentence with each page and just changing one word in the sentence</source>
+					<target />
+					<note>ID: leveled.reader.repetition</note>
+				  </trans-unit>
+				  <trans-unit id="leveled.reader.sequencing">
+					<source xml:lang="en">Sequencing - a story with a known sequence such as the days of the week or that uses numbers in a pattern</source>
+					<target />
+					<note>ID: leveled.reader.sequencing</note>
+				  </trans-unit>
+				  <trans-unit id="leveled.reader.building.sequence">
+					<source xml:lang="en">Building Sequence - a story with a pattern that is repeated and added to with each new page</source>
+					<target />
+					<note>ID: leveled.reader.building.sequence</note>
+				  </trans-unit>
+				  <trans-unit id="leveled.reader.rhyme">
+					<source xml:lang="en">Rhyme - a story with a pattern or sequence that also includes rhyme. For example:
+					<g id="genid-2" ctype="x-html-blockquote" html:class="poetry">
+					  <g id="genid-3" ctype="x-html-pre">Brown Bear, Brown Bear, What do you see?
+			I see a red bird looking at me.
+			Red Bird, Red Bird, What do you see?
+			I see a yellow duck looking at me.
+			Yellow Duck, Yellow Duck, What do you see?</g>
+					  <g id="genid-4" ctype="x-html-div" html:class="author">- Bill Martin, Jr. and Eric Carle</g>
+					</g></source>
+					<target />
+					<note>ID: leveled.reader.rhyme</note>
+				  </trans-unit>
+				</body>
+			  </file>
+			</xliff>
+			*/
+			var xmlDoc = extractor.Extract();
+			Assert.IsNotNull(xmlDoc);
+			ValidateXliffOutput(xmlDoc.OuterXml, "Xliff for TestNamespaceFixing3 did not validate against schema: {0}");
+
+			var xdoc = TestWriteXliff(xmlDoc);
+			ValidateXliffOutput(xdoc.OuterXml, "Cleaned up Xliff for TestNamespaceFixing3 did not validate against schema: {0}");
+
+			var nsmgr = HtmlXliff.CreateNamespaceManager(xdoc);
+			var body = xdoc.SelectSingleNode("/x:xliff/x:file/x:body", nsmgr);
+			Assert.IsNotNull(body);
+			VerifyTransUnitLayout(body, 6);
+
+			// Check for no leading or trailing whitespace, but also preserving internal whitespace.
+			var xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.IsTrue(xel.InnerXml.StartsWith(@"Rhyme - a story with a pattern or sequence that also includes rhyme. For example:
+        <g id=", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.EndsWith(@" Carle</g>
+        </g>", StringComparison.Ordinal));
+
+			// Test that two HTML namespace attributes in nested elements are handled correctly, using the global html: prefix
+			// instead of having either shared or separate namespace attribute(s) with distinct prefix(es).
+			xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source/x:g[@id='genid-2']", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.AreEqual(3, xel.Attributes.Count);
+			Assert.AreEqual("id", xel.Attributes[0].Name);
+			Assert.AreEqual("", xel.Attributes[0].Prefix);
+			Assert.AreEqual("genid-2", xel.Attributes[0].Value);
+			Assert.AreEqual("ctype", xel.Attributes[1].Name);
+			Assert.AreEqual("", xel.Attributes[1].Prefix);
+			Assert.AreEqual("x-html-blockquote", xel.Attributes[1].Value);
+			Assert.AreEqual("html:class", xel.Attributes[2].Name);
+			Assert.AreEqual("html", xel.Attributes[2].Prefix);
+			Assert.AreEqual("poetry", xel.Attributes[2].Value);
+			Assert.IsTrue(xel.InnerXml.StartsWith(@"
+          <g id=", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.Contains(@"</g>
+          <g id="));
+			Assert.IsTrue(xel.InnerXml.EndsWith(@" Carle</g>
+        ", StringComparison.Ordinal));
+			xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source/x:g[@id='genid-2']/x:g[@id='genid-3']", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.AreEqual(2, xel.Attributes.Count);
+			Assert.AreEqual("id", xel.Attributes[0].Name);
+			Assert.AreEqual("", xel.Attributes[0].Prefix);
+			Assert.AreEqual("genid-3", xel.Attributes[0].Value);
+			Assert.AreEqual("ctype", xel.Attributes[1].Name);
+			Assert.AreEqual("", xel.Attributes[1].Prefix);
+			Assert.AreEqual("x-html-pre", xel.Attributes[1].Value);
+			Assert.AreEqual(@"Brown Bear, Brown Bear, What do you see?
+I see a red bird looking at me.
+Red Bird, Red Bird, What do you see?
+I see a yellow duck looking at me.
+Yellow Duck, Yellow Duck, What do you see?", xel.InnerXml);
+			Assert.AreEqual(@"Brown Bear, Brown Bear, What do you see?
+I see a red bird looking at me.
+Red Bird, Red Bird, What do you see?
+I see a yellow duck looking at me.
+Yellow Duck, Yellow Duck, What do you see?", xel.InnerText);
+			xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source/x:g[@id='genid-2']//x:g[@id='genid-4']", nsmgr) as XmlElement;
+			Assert.IsNotNull(xel);
+			Assert.AreEqual(3, xel.Attributes.Count);
+			Assert.AreEqual("id", xel.Attributes[0].Name);
+			Assert.AreEqual("", xel.Attributes[0].Prefix);
+			Assert.AreEqual("genid-4", xel.Attributes[0].Value);
+			Assert.AreEqual("ctype", xel.Attributes[1].Name);
+			Assert.AreEqual("", xel.Attributes[1].Prefix);
+			Assert.AreEqual("x-html-div", xel.Attributes[1].Value);
+			Assert.AreEqual("html:class", xel.Attributes[2].Name);
+			Assert.AreEqual("html", xel.Attributes[2].Prefix);
+			Assert.AreEqual("author", xel.Attributes[2].Value);
+			Assert.AreEqual("- Bill Martin, Jr. and Eric Carle", xel.InnerXml);
+			Assert.AreEqual("- Bill Martin, Jr. and Eric Carle", xel.InnerText);
+		}
+
+		/// <summary>
+		/// Verify the expected basic layout of the XLIFF trans-unit elements.
+		/// (This may be redundant with VerifyXliffOutput() in some respects.)
+		/// </summary>
+		private static void VerifyTransUnitLayout(XmlNode body, int elementCount)
+		{
+			// We have whitespace before and after (and thus between) the trans-unit elements
+			// in the body of the xliff document.
+			// elementCount XmlElement children and (elementCount + 1) XmlWhitespace children
+			Assert.AreEqual(elementCount * 2 + 1, body.ChildNodes.Count);
+			foreach (XmlNode n0 in body.ChildNodes)
+			{
+				if (n0 is XmlWhitespace)
+					continue;
+				Assert.AreEqual("trans-unit", n0.Name);
+				Assert.AreEqual(1, n0.Attributes.Count);
+				Assert.AreEqual(3 + 4, n0.ChildNodes.Count);
+				Assert.IsTrue(n0.ChildNodes[0] is XmlWhitespace);
+				var source = n0.ChildNodes[1];
+				Assert.AreEqual("source", source.Name);
+				Assert.AreEqual(1, source.Attributes.Count);
+				Assert.AreEqual("en", source.Attributes["xml:lang"].Value);
+				Assert.IsTrue(n0.ChildNodes[2] is XmlWhitespace);
+				var target = n0.ChildNodes[3];
+				Assert.AreEqual("target", target.Name);
+				Assert.AreEqual(0, target.Attributes.Count);
+				Assert.AreEqual(0, target.ChildNodes.Count);
+				Assert.AreEqual("", target.InnerXml);
+				Assert.IsTrue(n0.ChildNodes[4] is XmlWhitespace);
+				var note = n0.ChildNodes[5];
+				Assert.AreEqual("note", note.Name);
+				Assert.AreEqual(0, note.Attributes.Count);
+				Assert.AreEqual(1, note.ChildNodes.Count);
+				Assert.AreEqual("ID: " + n0.Attributes["id"].Value, note.InnerText);
+				Assert.IsTrue(n0.ChildNodes[6] is XmlWhitespace);
+			}
+		}
+
+		/// <summary>
+		/// Use a StringBuilder instead of a filesystem file for storing the XLIFF output.
+		/// For testing, it preloads and returns another XmlDocument with the generated output.
+		/// </summary>
+		private static XmlDocument TestWriteXliff(XmlDocument xmlDoc)
+		{
+			var xbldr = new StringBuilder(10000);
+			HtmlXliff.WriteXliffToStringBuilder(xmlDoc, xbldr);
+			var xdoc = new XmlDocument();
+			xdoc.PreserveWhitespace = true;
+			xdoc.LoadXml(xbldr.ToString());
+			return xdoc;
 		}
 	}
 }

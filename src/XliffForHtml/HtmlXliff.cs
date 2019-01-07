@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web;
 using System.Xml;
 using System.Xml.Schema;
@@ -478,10 +479,7 @@ namespace XliffForHtml
 		/// </summary>
 		public HtmlDocument InjectTranslations(XmlDocument xliff, bool verboseWarnings)
 		{
-			_nsmgr = new XmlNamespaceManager(xliff.NameTable);
-			_nsmgr.AddNamespace("x", kXliffNamespace);
-			_nsmgr.AddNamespace("html", kHtmlNamespace);
-			_nsmgr.AddNamespace("sil", kSilNamespace);
+			_nsmgr = CreateNamespaceManager(xliff);
 			_verboseWarnings = verboseWarnings;
 			PreProcessXliff(xliff);
 			var htmlDoc = new HtmlDocument();
@@ -490,6 +488,22 @@ namespace XliffForHtml
 				MarkGlobalDocumentProperties(htmlDoc);
 			TranslateHtmlElement(htmlDoc.DocumentNode);
 			return htmlDoc;
+		}
+
+		/// <summary>
+		/// Create an XmlNamespaceManager for the given XmlDocument with our known namespaces and
+		/// standard prefixes.  ("x" is used for the default xliff namespace.)
+		/// </summary>
+		/// <remarks>
+		/// "internal static" so that unit tests can use the method easily.
+		/// </remarks>
+		internal static XmlNamespaceManager CreateNamespaceManager(XmlDocument xdoc)
+		{
+			var nsmgr = new XmlNamespaceManager(xdoc.NameTable);
+			nsmgr.AddNamespace("x", kXliffNamespace);
+			nsmgr.AddNamespace("html", kHtmlNamespace);
+			nsmgr.AddNamespace("sil", kSilNamespace);
+			return nsmgr;
 		}
 
 		/// <summary>
@@ -721,15 +735,13 @@ namespace XliffForHtml
 		/// </summary>
 		public static void SaveXliffFile(XmlDocument newXliff, string outputFile, bool preserve = false, string oldFile = null)
 		{
-			if (!preserve || String.IsNullOrEmpty(oldFile) || !File.Exists(oldFile))
+			if (preserve && !String.IsNullOrEmpty(oldFile) && File.Exists(oldFile))
 			{
-				newXliff.Save(outputFile);
-				return;
+				var oldXliff = new XmlDocument();
+				oldXliff.Load(oldFile);
+				CopyMissingNotesToNewXliff(newXliff, oldXliff);
 			}
-			var oldXliff = new XmlDocument();
-			oldXliff.Load(oldFile);
-			CopyMissingNotesToNewXliff(newXliff, oldXliff);
-			newXliff.Save(outputFile);
+			WriteXliffFile(newXliff, outputFile);
 		}
 
 		/// <summary>
@@ -771,6 +783,185 @@ namespace XliffForHtml
 					tu.AppendChild(newNote);
 				}
 			}
+		}
+
+		/// <summary>
+		/// XmlDocument.Save() can indent &lt;g&gt; elements embedded inside &lt;source&gt;
+		/// elements, thus introducing unwanted whitespace.  So we have our own output
+		/// method which follows the normal indentations EXCEPT inside &lt;source&gt;
+		/// elements.  The method also eliminates any leading or trailing whitespace
+		/// introduced as an artifact from scanning the English HTML.  This whitespace
+		/// is not needed, and just confuses the translation process on Crowdin.
+		/// </summary>
+		/// <remarks>
+		/// See https://issues.bloomlibrary.org/youtrack/issue/BL-6758.
+		/// </remarks>
+		private static void WriteXliffFile(XmlDocument xliff, string outputFile)
+		{
+			xliff.PreserveWhitespace = true;
+			var settings = CreateWriterSettings();
+			using (var writer = XmlWriter.Create(outputFile, settings))
+			{
+				WriteXliffElement(writer, xliff.DocumentElement);
+				writer.Flush();
+				writer.Close();
+			}
+		}
+
+		/// <summary>
+		/// Same as WriteXliffFile except that it writes the xliff to a StringBuilder instead of a filesystem file.
+		/// This is used by unit tests.
+		/// </summary>
+		/// <remarks>
+		/// "internal static" so that unit tests can use the method easily.
+		/// </remarks>
+		internal static void WriteXliffToStringBuilder(XmlDocument xliff, StringBuilder xbldr)
+		{
+			xliff.PreserveWhitespace = true;
+			var settings = CreateWriterSettings();
+			using (var writer = XmlWriter.Create(xbldr, settings))
+			{
+				WriteXliffElement(writer, xliff.DocumentElement);
+				writer.Flush();
+				writer.Close();
+			}
+
+		}
+
+		/// <summary>
+		/// Create an XmlWriterSettings with the desired values.
+		/// </summary>
+		private static XmlWriterSettings CreateWriterSettings()
+		{
+			return new XmlWriterSettings
+			{
+				Indent = true,
+				NewLineChars = Environment.NewLine
+			};
+		}
+
+		/// <summary>
+		/// Writing the XML indents child elements because we've set that option in the settings of
+		/// the writer, but we don't want newlines and spaces added inside &lt;source&gt; elements.
+		/// (We don't want any leading or trailing newlines at all in that context due to possible
+		/// confusion on Crowdin: see https://issues.bloomlibrary.org/youtrack/issue/BL-6758).  Note
+		/// that extracting strings from HTML can produce either &lt;g&gt; or &lt;x&gt; elements in
+		/// the &lt;source&gt; elements, and the &lt;g&gt; elements can themselves contain either
+		/// &lt;g&gt; or &lt;x&gt; elements.  So the indentation can occur inside the &lt;source&gt;
+		/// element content and not just at its edges.
+		/// </summary>
+		/// <remarks>
+		/// Note that turning writer.Settings.Indent on and off doesn't work because it is a read-only
+		/// property.  Unfortunately, XmlNode.InnerXml (which we need to use to handle this newline and
+		/// indentation whitespace problem because it doesn't indent child elements) adds namespace
+		/// attributes that we don't need with private namespace markers that differ from what we want.
+		/// So we need to handle that problem explicitly when trying to write the content of the
+		/// &lt;source&gt; elements verbatim.
+		/// </remarks>
+		internal static void WriteXliffElement(XmlWriter writer, XmlElement xel)
+		{
+			writer.WriteStartElement(xel.LocalName, kXliffNamespace);
+			foreach (XmlAttribute attr in xel.Attributes)
+				writer.WriteAttributeString(attr.Prefix, attr.LocalName, null, attr.Value);
+			if (xel.LocalName == "source")
+			{
+				var innerXml = xel.InnerXml;
+				if (innerXml.Contains("xmlns:"))
+					innerXml = CleanupNamespaceGarbage(innerXml);
+				// Remove any surrounding whitespace involving a newline -- it is not needed in html.
+				innerXml = TrimSurroundingNewLines(innerXml);
+				writer.WriteRaw(innerXml);
+			}
+			else
+			{
+				foreach (var child in xel.ChildNodes)
+				{
+					if (child is XmlElement)
+						WriteXliffElement(writer, child as XmlElement);
+					else if (child is XmlText)
+						writer.WriteString((child as XmlText).Value);
+				}
+			}
+			writer.WriteEndElement();
+		}
+
+		/// <summary>
+		/// The raw XML from XmlNode.InnerXml has explicit namespace attributes that we absolutely
+		/// don't want.  So we detect and remove them here, converting any attribute name prefixes
+		/// to what we do want.  This would have to be either html: or sil: since those are the
+		/// only namespace names that can exist in these xliff files.  (We're in full control of the
+		/// file content if not the exact format after all!)  The namespace values don't have any
+		/// reserved characters to worry about, and are always written out with double quotes
+		/// immediately following an attribute that uses the namespace.  More than one attribute
+		/// can use that namespace marker, which complicates things.
+		/// </summary>
+		private static string CleanupNamespaceGarbage(string innerXml)
+		{
+			//  Input: Make a new book, one for each week<g id="genid-1" ctype="x-html-sup"><g id="genid-2" ctype="x-html-a" d2p1:href="#note1" xmlns:d2p1="http://www.w3.org/TR/html">1</g></g>.
+			// Output: Make a new book, one for each week<g id="genid-1" ctype="x-html-sup"><g id="genid-2" ctype="x-html-a" html:href="#note1">1</g></g>.
+			//  Input: <g id="genid-14" ctype="x-html-a" d1p1:id="note4" xmlns:d1p1="http://www.w3.org/TR/html">4</g>: If ... this: <x id="genid-15" ctype="image" d1p1:src="ReadMeImages/pageDescription.png" d1p1:alt="description" xmlns:d1p1="http://www.w3.org/TR/html" />
+			// Output: <g id="genid-14" ctype="x-html-a" html:id="note4">4</g>: If ... this: <x id="genid-15" ctype="image" html:src="ReadMeImages/pageDescription.png" html:alt="description" />
+			/*  Input: For example:
+        <g id="genid-2" ctype="x-html-blockquote" d1p1:class="poetry" xmlns:d1p1="http://www.w3.org/TR/html">
+          <g id="genid-3" ctype="x-html-pre">Brown Bear, Brown Bear, What do you see?
+I see a red bird looking at me.
+Red Bird, Red Bird, What do you see?
+I see a yellow duck looking at me.
+Yellow Duck, Yellow Duck, What do you see?</g>
+          <g id="genid-4" ctype="x-html-div" d1p1:class="author">- Bill Martin, Jr. and Eric Carle</g>
+        </g> */
+			/* Output: For example:
+        <g id="genid-2" ctype="x-html-blockquote" html:class="poetry">
+          <g id="genid-3" ctype="x-html-pre">Brown Bear, Brown Bear, What do you see?
+I see a red bird looking at me.
+Red Bird, Red Bird, What do you see?
+I see a yellow duck looking at me.
+Yellow Duck, Yellow Duck, What do you see?</g>
+          <g id="genid-4" ctype="x-html-div" html:class="author">- Bill Martin, Jr. and Eric Carle</g>
+        </g> */
+			// (Patterns like these are tested in the unit tests.)
+			var matches = Regex.Matches(innerXml, " ([a-z0-9]+):[a-z]+=\"[^\"]*\"( xmlns:\\1=\"[^\"]*\")");
+			// Start with the last match so that index values will remain valid as we modify the string.
+			for (int i = matches.Count - 1; i >= 0; --i)
+			{
+				var match = matches[i];
+				string prefix = "";
+				if (match.Groups[2].Value.Contains(kHtmlNamespace))
+					prefix = "html:";
+				else if (match.Groups[2].Value.Contains(kSilNamespace))
+					prefix = "sil:";
+				var nsMarker = " " + match.Groups[1].Value + ":";
+				innerXml = innerXml.Remove(match.Groups[2].Index, match.Groups[2].Length);
+				innerXml = innerXml.Remove(match.Groups[1].Index, match.Groups[1].Length + 1);	// also remove the :
+				innerXml = innerXml.Insert(match.Groups[1].Index, prefix);
+				var startIndex = 0;
+				if (i > 0)
+					startIndex = matches[i - 1].Index + matches[i - 1].Length;
+				// Fix any other (preceding in the same start tag or found in descendent element start tags) occurrences.
+				// The actual form used by the code for namespace markers is extremely unlikely to be used in actual data.
+				var idx = innerXml.IndexOf(nsMarker, startIndex, StringComparison.Ordinal);
+				while (idx >= startIndex)
+				{
+					innerXml = innerXml.Remove(idx + 1, nsMarker.Length - 1);
+					innerXml = innerXml.Insert(idx + 1, prefix);
+					idx = innerXml.IndexOf(nsMarker, idx, StringComparison.Ordinal);
+				}
+			}
+			return innerXml;
+		}
+
+		/// <summary>
+		/// Trim any surrounding whitespace that includes newlines.
+		/// </summary>
+		private static string TrimSurroundingNewLines(string innerXml)
+		{
+			var match = Regex.Match(innerXml, "^(\\s*\\n\\s*)", RegexOptions.Singleline);
+			if (match.Success)
+				innerXml = innerXml.Remove(match.Groups[1].Index, match.Groups[1].Length);
+			match = Regex.Match(innerXml, "(\\s*\\n\\s*)$", RegexOptions.Singleline);
+			if (match.Success)
+				innerXml = innerXml.Remove(match.Groups[1].Index);
+			return innerXml;
 		}
 	}
 }

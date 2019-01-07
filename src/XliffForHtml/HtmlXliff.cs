@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web;
 using System.Xml;
 using System.Xml.Schema;
@@ -721,15 +722,13 @@ namespace XliffForHtml
 		/// </summary>
 		public static void SaveXliffFile(XmlDocument newXliff, string outputFile, bool preserve = false, string oldFile = null)
 		{
-			if (!preserve || String.IsNullOrEmpty(oldFile) || !File.Exists(oldFile))
+			if (preserve && !String.IsNullOrEmpty(oldFile) && File.Exists(oldFile))
 			{
-				newXliff.Save(outputFile);
-				return;
+				var oldXliff = new XmlDocument();
+				oldXliff.Load(oldFile);
+				CopyMissingNotesToNewXliff(newXliff, oldXliff);
 			}
-			var oldXliff = new XmlDocument();
-			oldXliff.Load(oldFile);
-			CopyMissingNotesToNewXliff(newXliff, oldXliff);
-			newXliff.Save(outputFile);
+			WriteXliffFile(newXliff, outputFile);
 		}
 
 		/// <summary>
@@ -771,6 +770,103 @@ namespace XliffForHtml
 					tu.AppendChild(newNote);
 				}
 			}
+		}
+
+		/// <summary>
+		/// XmlDocument.Save() can indent &lt;g&gt; elements embedded inside &lt;source&gt;
+		/// elements, thus introducing unwanted whitespace.  So we have our own output
+		/// method which follows the normal indentations EXCEPT inside &lt;source&gt;
+		/// elements.  The method also eliminates any leading or trailing whitespace
+		/// introduced as an artifact from scanning the English HTML.  This whitespace
+		/// is not needed, and just confuses the translation process on Crowdin.
+		/// </summary>
+		/// <remarks>
+		/// See https://issues.bloomlibrary.org/youtrack/issue/BL-6758.
+		/// </remarks>
+		private static void WriteXliffFile(XmlDocument xliff, string outputFile)
+		{
+			xliff.PreserveWhitespace = true;
+			var settings = new XmlWriterSettings
+			{
+				Indent = true,
+				NewLineChars = Environment.NewLine
+			};
+			using (var writer = XmlWriter.Create(outputFile, settings))
+			{
+				WriteXliffElement(writer, xliff.DocumentElement);
+				writer.Flush();
+				writer.Close();
+			}
+		}
+
+		/// <summary>
+		/// Writing the XML normally indents each new child element, but we don't want any
+		/// whitespace added inside &lt;source&gt; elements.
+		/// </summary>
+		private static void WriteXliffElement(XmlWriter writer, XmlElement xel)
+		{
+			writer.WriteStartElement(xel.LocalName, kXliffNamespace);
+			foreach (XmlAttribute attr in xel.Attributes)
+				writer.WriteAttributeString(attr.Prefix, attr.LocalName, null, attr.Value);
+			if (xel.LocalName == "source")
+			{
+				var innerXml = xel.InnerXml;
+				if (innerXml.Contains("xmlns:"))
+					innerXml = CleanupNamespaceGarbage(innerXml);
+				// Remove any surrounding whitespace involving a newline -- it is not needed in html.
+				innerXml = TrimSurroundingNewLines(innerXml);
+				writer.WriteRaw(innerXml);
+			}
+			else
+			{
+				foreach (var child in xel.ChildNodes)
+				{
+					if (child is XmlElement)
+						WriteXliffElement(writer, child as XmlElement);
+					else if (child is XmlText)
+						writer.WriteString((child as XmlText).Value);
+				}
+			}
+			writer.WriteEndElement();
+		}
+
+		/// <summary>
+		/// The raw XML from XmlNode.InnerXml has explicit namespace attributes that we absolutely
+		/// don't want.  So we detect and remove them here, converting any attribute name prefixes
+		/// to what we do want.  This would have to be either html: or sil: since those are the
+		/// only namespace names we know about.
+		/// </summary>
+		private static string CleanupNamespaceGarbage(string innerXml)
+		{
+			var matches = Regex.Matches(innerXml, " ([a-z0-9]+):[a-z]+=\"[^\"]*\"( xmlns:\\1=\"[^\"]*\")");
+			// Start with the last match so that index values will remain valid as we modify the string.
+			for (int i = matches.Count - 1; i >= 0; --i)
+			{
+				var match = matches[i];
+				string prefix = "";
+				if (match.Groups[2].Value.Contains(kHtmlNamespace))
+					prefix = "html:";
+				else if (match.Groups[2].Value.Contains(kSilNamespace))
+					prefix = "sil:";
+				innerXml = innerXml.Remove(match.Groups[2].Index, match.Groups[2].Length);
+				innerXml = innerXml.Remove(match.Groups[1].Index, match.Groups[1].Length + 1);	// also remove the :
+				innerXml = innerXml.Insert(match.Groups[1].Index, prefix);
+			}
+			return innerXml;
+		}
+
+		/// <summary>
+		/// Trim any surrounding whitespace that includes newlines.
+		/// </summary>
+		private static string TrimSurroundingNewLines(string innerXml)
+		{
+			var match = Regex.Match(innerXml, "^(\\s*\\n\\s*)", RegexOptions.Singleline);
+			if (match.Success)
+				innerXml = innerXml.Remove(match.Groups[1].Index, match.Groups[1].Length);
+			match = Regex.Match(innerXml, "(\\s*\\n\\s*)$", RegexOptions.Singleline);
+			if (match.Success)
+				innerXml = innerXml.Remove(match.Groups[1].Index);
+			return innerXml;
 		}
 	}
 }

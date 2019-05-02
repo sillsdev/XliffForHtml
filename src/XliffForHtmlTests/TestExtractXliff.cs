@@ -412,8 +412,7 @@ and there you have it.</source>
 			Assert.AreEqual(3, source.ChildNodes.Count);
 			var n0 = source.ChildNodes[0];
 			Assert.AreEqual(XmlNodeType.Text, n0.NodeType);
-			Assert.AreEqual(@"My picture,
-", n0.InnerText);
+			Assert.AreEqual("My picture,"+Environment.NewLine, n0.InnerText);
 			var n1 = source.ChildNodes[1];
 			Assert.AreEqual("x", n1.Name);
 			Assert.AreEqual(4, n1.Attributes.Count);
@@ -423,8 +422,7 @@ and there you have it.</source>
 			Assert.AreEqual("This is a shot of Mount Hood", n1.Attributes["alt", HtmlXliff.kHtmlNamespace].Value);
 			var n2 = source.ChildNodes[2];
 			Assert.AreEqual(XmlNodeType.Text, n2.NodeType);
-			Assert.AreEqual(@"
-and there you have it.", n2.InnerText);
+			Assert.AreEqual(Environment.NewLine+"and there you have it.", n2.InnerText);
 			CheckNoteElement(tu);
 		}
 
@@ -690,8 +688,7 @@ face</g>.</source>
 					Assert.AreEqual("#339966", n0.Attributes["fontcolor", XliffForHtml.HtmlXliff.kHtmlNamespace].Value);
 					Assert.AreEqual(1, n0.ChildNodes.Count);
 					Assert.AreEqual(XmlNodeType.Text, n0.FirstChild.NodeType);
-					Assert.AreEqual(@"Green
-face", n0.FirstChild.InnerText);
+					Assert.AreEqual("Green" + Environment.NewLine + "face", n0.FirstChild.InnerText);
 					break;
 				case 2:
 					Assert.AreEqual(XmlNodeType.Text, n0.NodeType);
@@ -705,8 +702,7 @@ face", n0.FirstChild.InnerText);
 					Assert.AreEqual("#333399", n0.Attributes["fontcolor", XliffForHtml.HtmlXliff.kHtmlNamespace].Value);
 					Assert.AreEqual(1, n0.ChildNodes.Count);
 					Assert.AreEqual(XmlNodeType.Text, n0.FirstChild.NodeType);
-					Assert.AreEqual(@"Indigo
-face", n0.FirstChild.InnerText);
+					Assert.AreEqual("Indigo" + Environment.NewLine + "face", n0.FirstChild.InnerText);
 					break;
 				case 4:
 					Assert.AreEqual(XmlNodeType.Text, n0.NodeType);
@@ -1736,10 +1732,8 @@ Yellow Duck, Yellow Duck, What do you see?</pre>
 			// Check for no leading or trailing whitespace, but also preserving internal whitespace.
 			var xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source", nsmgr) as XmlElement;
 			Assert.IsNotNull(xel);
-			Assert.IsTrue(xel.InnerXml.StartsWith(@"Rhyme - a story with a pattern or sequence that also includes rhyme. For example:
-        <g id=", StringComparison.Ordinal));
-			Assert.IsTrue(xel.InnerXml.EndsWith(@" Carle</g>
-        </g>", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.StartsWith("Rhyme - a story with a pattern or sequence that also includes rhyme. For example:" + Environment.NewLine + "        <g id=", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.EndsWith(" Carle</g>" + Environment.NewLine + "        </g>", StringComparison.Ordinal));
 
 			// Test that two HTML namespace attributes in nested elements are handled correctly, using the global html: prefix
 			// instead of having either shared or separate namespace attribute(s) with distinct prefix(es).
@@ -1755,12 +1749,9 @@ Yellow Duck, Yellow Duck, What do you see?</pre>
 			Assert.AreEqual("html:class", xel.Attributes[2].Name);
 			Assert.AreEqual("html", xel.Attributes[2].Prefix);
 			Assert.AreEqual("poetry", xel.Attributes[2].Value);
-			Assert.IsTrue(xel.InnerXml.StartsWith(@"
-          <g id=", StringComparison.Ordinal));
-			Assert.IsTrue(xel.InnerXml.Contains(@"</g>
-          <g id="));
-			Assert.IsTrue(xel.InnerXml.EndsWith(@" Carle</g>
-        ", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.StartsWith(Environment.NewLine + "          <g id=", StringComparison.Ordinal));
+			Assert.IsTrue(xel.InnerXml.Contains("</g>" + Environment.NewLine + "          <g id="));
+			Assert.IsTrue(xel.InnerXml.EndsWith(" Carle</g>" + Environment.NewLine + "        ", StringComparison.Ordinal));
 			xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source/x:g[@id='genid-2']/x:g[@id='genid-3']", nsmgr) as XmlElement;
 			Assert.IsNotNull(xel);
 			Assert.AreEqual(2, xel.Attributes.Count);
@@ -1770,16 +1761,16 @@ Yellow Duck, Yellow Duck, What do you see?</pre>
 			Assert.AreEqual("ctype", xel.Attributes[1].Name);
 			Assert.AreEqual("", xel.Attributes[1].Prefix);
 			Assert.AreEqual("x-html-pre", xel.Attributes[1].Value);
-			Assert.AreEqual(@"Brown Bear, Brown Bear, What do you see?
-I see a red bird looking at me.
-Red Bird, Red Bird, What do you see?
-I see a yellow duck looking at me.
-Yellow Duck, Yellow Duck, What do you see?", xel.InnerXml);
-			Assert.AreEqual(@"Brown Bear, Brown Bear, What do you see?
-I see a red bird looking at me.
-Red Bird, Red Bird, What do you see?
-I see a yellow duck looking at me.
-Yellow Duck, Yellow Duck, What do you see?", xel.InnerText);
+			Assert.AreEqual("Brown Bear, Brown Bear, What do you see?" + Environment.NewLine +
+"I see a red bird looking at me." + Environment.NewLine +
+"Red Bird, Red Bird, What do you see?" + Environment.NewLine +
+"I see a yellow duck looking at me." + Environment.NewLine +
+"Yellow Duck, Yellow Duck, What do you see?", xel.InnerXml);
+			Assert.AreEqual("Brown Bear, Brown Bear, What do you see?" + Environment.NewLine +
+"I see a red bird looking at me." + Environment.NewLine +
+"Red Bird, Red Bird, What do you see?" + Environment.NewLine +
+"I see a yellow duck looking at me." + Environment.NewLine +
+"Yellow Duck, Yellow Duck, What do you see?", xel.InnerText);
 			xel = body.SelectSingleNode("./x:trans-unit[@id='leveled.reader.rhyme']/x:source/x:g[@id='genid-2']//x:g[@id='genid-4']", nsmgr) as XmlElement;
 			Assert.IsNotNull(xel);
 			Assert.AreEqual(3, xel.Attributes.Count);

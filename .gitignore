@@ -2,3 +2,4 @@ build/NuGet.exe
 output/
 packages/
 obj/
+.vs/

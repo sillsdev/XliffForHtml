@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2017 SIL International
+// Copyright (c) 2017 SIL International
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT)
 using System;
 using System.IO;
@@ -1362,9 +1362,69 @@ which is at <g id="genid-1" ctype="x-html-strong">{{installFolder}}</g>.</source
 		}
 
 		[Test]
+		public void CopyObsoleteUnitsToNewXliff_CreatesObsoleteAndMaintainsExisting_Works()
+		{
+			// Create the xliff from an original HTML file representation to mimic program behavior.
+			var extractor = HtmlXliff.Parse(@"<html>
+ <body>
+  <h3 i18n=""epubpreview.recommended.reader"">Recommended Reader</h3>
+  <p class=""showForTalkingBooks"" i18n=""epubpreview.gitden.limits"">Disable Gitden's ""Read aloud (TTS)"" feature.</p>
+  <h3 class=""showWhenNoAudio"" i18n=""epubpreview.make.it.talk"">Make it Talk Aloud</h3>
+ </body>
+</html>");
+			var newXliff = extractor.Extract();
+			// Mimic having a previous version of the generated xliff that has two strings that no longer exist
+			// in the HTML file. One of the two is already marked "obsolete".
+			var oldXliff = new XmlDocument();
+			oldXliff.LoadXml(@"<?xml version='1.0' encoding='utf-8'?>
+<xliff version='1.2' xmlns='urn:oasis:names:tc:xliff:document:1.2' xmlns:html='http://www.w3.org/TR/html' xmlns:sil='http://sil.org/software/XLiff'>
+  <file original='testing.html' datatype='html' source-language='en'>
+    <body>
+      <trans-unit id='epubpreview.gitden.limits'>
+        <source xml:lang='en'>Disable Gitden's ""Read aloud (TTS)"" feature.</source>
+        <target />
+        <note>ID: epubpreview.gitden.limits</note>
+        <note>OLD TEXT (Gitden's wording changed): Disable Gitden's ""Text To Speech"" feature.</note>
+      </trans-unit>
+      <trans-unit id='epubpreview.make.it.talk'>
+        <source xml:lang='en'>Make it Talk</source>
+        <target />
+        <note>ID: epubpreview.make.it.talk</note>
+      </trans-unit>
+      <trans-unit id='integrity.title'>
+        <source xml:lang='en'>Bloom cannot find some of its own files, and cannot continue</source>
+        <target />
+        <note>ID: integrity.title</note>
+      </trans-unit>
+      <trans-unit id='integrity.title.2'>
+        <source xml:lang='en'>Bloom cannot find anybody's files! Panic!</source>
+        <target />
+        <note>ID: integrity.title.2</note>
+        <note>Obsolete in 5.2</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>");
+
+			//SUT
+			HtmlXliff.CopyObsoleteUnitsToNewXliff(newXliff, oldXliff);
+
+			var units = newXliff.SelectNodes("/xliff/file/body/trans-unit");
+			// 4 from the old file + 1 new one in the new file (epubpreview.recommended.reader)
+			Assert.AreEqual(5, units.Count);
+
+			var tu = units.Item(3);
+			CheckXliffWithNotes(tu, "integrity.title", 4, "Bloom cannot find some of its own files, and cannot continue",
+				new[] { "ID: integrity.title", "Obsolete for {name} {version}" });
+			var alreadyObsoleteTu = units.Item(4);
+			CheckXliffWithNotes(alreadyObsoleteTu, "integrity.title.2", 4, "Bloom cannot find anybody's files! Panic!",
+				new[] { "ID: integrity.title.2", "Obsolete in 5.2" });
+		}
+
+		[Test]
 		public void TestCopyingNotesFromOldXliff()
 		{
-			// Create the xliff from an original HTML file to mimic program behavior.
+			// Create the xliff from an original HTML file representation to mimic program behavior.
 			var extractor = HtmlXliff.Parse(@"<html>
  <body>
   <h3 i18n=""epubpreview.recommended.reader"">Recommended Reader</h3>

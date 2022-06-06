@@ -740,6 +740,7 @@ namespace XliffForHtml
 				var oldXliff = new XmlDocument();
 				oldXliff.Load(oldFile);
 				CopyMissingNotesToNewXliff(newXliff, oldXliff);
+				CopyObsoleteUnitsToNewXliff(newXliff, oldXliff);
 			}
 			WriteXliffFile(newXliff, outputFile);
 		}
@@ -781,6 +782,70 @@ namespace XliffForHtml
 					var newNote = newXliff.CreateElement("note");
 					newNote.InnerXml = oldNote.InnerXml;
 					tu.AppendChild(newNote);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Any trans-unit elements found in the old xliff document that are missing in the new xliff document
+		/// are copied to the new xliff document, but marked as "obsolete". This allows us to essentially maintain
+		/// one set of xliff files across versions without suddenly dropping existing translations from release or
+		/// beta versions. Developers can manually remove strings once they are obsolete in the release version too.
+		/// </summary>
+		public static void CopyObsoleteUnitsToNewXliff(XmlDocument newXliff, XmlDocument oldXliff)
+		{
+			// newXliff doesn't need a namespace manager because of the way HtmlXliff.Extract()
+			// creates the document.  However, oldXliff does need a namespace manager because it
+			// is created by loading existing XML that specifies namespaces.  Don't blame me for
+			// this baffling difference.
+			var oldNsmgr = new XmlNamespaceManager(oldXliff.NameTable);
+			oldNsmgr.AddNamespace("x", kXliffNamespace);
+			oldNsmgr.AddNamespace("html", kHtmlNamespace);
+			oldNsmgr.AddNamespace("sil", kSilNamespace);
+
+			var newUnits = newXliff.SelectNodes("/xliff/file/body//trans-unit");
+			var currentIds = new HashSet<string>();
+			foreach (XmlNode tu in newUnits)
+			{
+				var id = tu.Attributes["id"].Value;
+				currentIds.Add(id);
+			}
+			var oldUnits = oldXliff.SelectNodes("/x:xliff/x:file/x:body//x:trans-unit", oldNsmgr);
+			var bodyNew = newXliff.SelectSingleNode("/xliff/file/body");
+			foreach (XmlNode tuOld in oldUnits)
+			{
+				var id = tuOld.Attributes["id"].Value;
+				if (currentIds.Contains(id))
+					continue;
+				var tuNew = newXliff.CreateElement("trans-unit");
+				var innerXml = tuOld.InnerXml;
+				// It is necessary to not have namespaces in the new file xml because the file writer isn't
+				// expecting them and they mess up at least one of the tests.
+				// There were a few options for doing that that we discarded:
+				// 1) cloneNode() keeps the old doc context and complains if you try to add a cloned node to the new
+				//    document.
+				// 2) removeNamespace() apparently immediately inserts the default namespace, which was not wanted
+				//    either.
+				// So we use regex to strip them out of the old node's InnerXml before pasting it into the new node.
+				innerXml = Regex.Replace(innerXml, "xmlns=\"[^\"]*\"", ""); // strip out namespace attributes
+				tuNew.InnerXml = innerXml;
+				tuNew.SetAttribute("id", id);
+				bodyNew.AppendChild(tuNew);
+				var oldNotes = tuNew.SelectNodes("./note");
+				var alreadyObsolete = false;
+				foreach (XmlNode note in oldNotes)
+				{
+					if (note.InnerText.ToLowerInvariant().Contains("obsolete"))
+					{
+						alreadyObsolete = true;
+						break;
+					}
+				}
+				if (!alreadyObsolete)
+				{
+					var newNoteForObsolete = newXliff.CreateElement("note");
+					newNoteForObsolete.InnerText = "Obsolete for {name} {version}";
+					tuNew.AppendChild(newNoteForObsolete);
 				}
 			}
 		}

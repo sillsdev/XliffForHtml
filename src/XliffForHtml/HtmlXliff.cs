@@ -999,6 +999,8 @@ Yellow Duck, Yellow Duck, What do you see?</g>
 				innerXml = innerXml.Remove(match.Groups[2].Index, match.Groups[2].Length);
 				innerXml = innerXml.Remove(match.Groups[1].Index, match.Groups[1].Length + 1);	// also remove the :
 				innerXml = innerXml.Insert(match.Groups[1].Index, prefix);
+				if (prefix == nsMarker.Trim())
+					continue;
 				var startIndex = 0;
 				if (i > 0)
 					startIndex = matches[i - 1].Index + matches[i - 1].Length;
